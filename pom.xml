@@ -5,11 +5,11 @@
   <parent>
     <groupId>org.pentaho</groupId>
     <artifactId>pentaho-ce-jar-parent-pom</artifactId>
-    <version>9.5.0.0-237</version>
+    <version>9.6.0.0-SNAPSHOT</version>
   </parent>
   <groupId>pentaho</groupId>
   <artifactId>pentaho-metadata-editor-parent</artifactId>
-  <version>9.5.0.0-237</version>
+  <version>9.6.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>${project.artifactId}</name>
   <description></description>
@@ -37,11 +37,10 @@
     <ehcache.version>1.1</ehcache.version>
     <equinox.bidi.version>1.3.0</equinox.bidi.version>
     <equinox.common.version>3.14.0</equinox.common.version>
-    <hibernate.version>3.2.2.ga</hibernate.version>
+    <hibernate.version>6.3.0.Final</hibernate.version>
     <javadbf.version>0.4.0</javadbf.version>
     <javassist.version>3.20.0-GA</javassist.version>
     <jface.version>3.22.0</jface.version>
-    <js.version>1.7R3</js.version>
     <jsch.version>0.1.54</jsch.version>
     <jsr311-api.version>1.1.1</jsr311-api.version>
     <jug-lgpl.version>2.0.0</jug-lgpl.version>
@@ -64,20 +63,18 @@
     <pentaho-cwm.version>1.5.4</pentaho-cwm.version>
     <scannotation.version>1.0.2</scannotation.version>
     <snmp4j.version>1.9.3d</snmp4j.version>
-    <trilead-ssh2.version>1.0.0-build215</trilead-ssh2.version>
-
-    <pentaho-connections.version>9.5.0.0-237</pentaho-connections.version>
-    <pdi.version>9.5.0.0-237</pdi.version>
-    <pentaho-reporting.version>9.5.0.0-237</pentaho-reporting.version>
-    <pentaho-metadata.version>9.5.0.0-237</pentaho-metadata.version>
-    <pentaho-vfs-browser.version>9.5.0.0-237</pentaho-vfs-browser.version>
-    <commons-xul.version>9.5.0.0-237</commons-xul.version>
-    <pentaho-karaf.version>9.5.0.0-237</pentaho-karaf.version>
-    <pentaho-osgi-bundles.version>9.5.0.0-237</pentaho-osgi-bundles.version>
-    <pdi-osgi-bridge.version>9.5.0.0-237</pdi-osgi-bridge.version>
-    <pentaho-metaverse.version>9.5.0.0-237</pentaho-metaverse.version>
-    <platform.version>9.5.0.0-237</platform.version>
-    <pentaho-mql-editor.version>9.5.0.0-237</pentaho-mql-editor.version>
+    <pentaho-connections.version>9.6.0.0-SNAPSHOT</pentaho-connections.version>
+    <pdi.version>9.6.0.0-SNAPSHOT</pdi.version>
+    <pentaho-reporting.version>9.6.0.0-SNAPSHOT</pentaho-reporting.version>
+    <pentaho-metadata.version>9.6.0.0-SNAPSHOT</pentaho-metadata.version>
+    <pentaho-vfs-browser.version>9.6.0.0-SNAPSHOT</pentaho-vfs-browser.version>
+    <commons-xul.version>9.6.0.0-SNAPSHOT</commons-xul.version>
+    <pentaho-karaf.version>9.6.0.0-SNAPSHOT</pentaho-karaf.version>
+    <pentaho-osgi-bundles.version>9.6.0.0-SNAPSHOT</pentaho-osgi-bundles.version>
+    <pdi-osgi-bridge.version>9.6.0.0-SNAPSHOT</pdi-osgi-bridge.version>
+    <pentaho-metaverse.version>9.6.0.0-SNAPSHOT</pentaho-metaverse.version>
+    <platform.version>9.6.0.0-SNAPSHOT</platform.version>
+    <pentaho-mql-editor.version>9.6.0.0-SNAPSHOT</pentaho-mql-editor.version>
     <jakarta-annotaion-api.version>1.3.5</jakarta-annotaion-api.version>
   </properties>
 
@@ -693,7 +690,7 @@
     </dependency>
     <dependency>
       <groupId>org.hibernate</groupId>
-      <artifactId>hibernate</artifactId>
+      <artifactId>hibernate-core</artifactId>
       <version>${hibernate.version}</version>
       <exclusions>
         <exclusion>
@@ -714,9 +711,8 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>rhino</groupId>
-      <artifactId>js</artifactId>
-      <version>${js.version}</version>
+      <groupId>org.mozilla</groupId>
+      <artifactId>rhino</artifactId>
       <exclusions>
         <exclusion>
           <groupId>*</groupId>
@@ -810,17 +806,6 @@
       <groupId>pentaho</groupId>
       <artifactId>simple-jndi</artifactId>
       <version>${simple-jndi.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>*</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.trilead</groupId>
-      <artifactId>trilead-ssh2</artifactId>
-      <version>${trilead-ssh2.version}</version>
       <exclusions>
         <exclusion>
           <groupId>*</groupId>
@@ -955,31 +940,22 @@
 
   <repositories>
     <repository>
-      <id>pentaho-public</id>
-      <name>Pentaho Public</name>
-      <url>https://repo.orl.eng.hitachivantara.com/artifactory/pnt-mvn/</url>
-      <releases>
-        <enabled>true</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>interval:15</updatePolicy>
-      </snapshots>
+      <id>bmc-nexus-snapshot</id>
+      <name>BMC Nexus Snapshot</name>
+      <url>http://clmpunenexus.bmc.com:18080/nexus/content/repositories/BuildToolsSnapshot/RMS/</url>
+	</repository>
+	<repository>
+      <id>bmc-nexus</id>
+      <name>BMC Nexus</name>
+      <url>http://clmpunenexus.bmc.com:18080/nexus/content/repositories/thirdparty/RMS/</url>
     </repository>
   </repositories>
 
   <pluginRepositories>
     <pluginRepository>
-      <id>pentaho-public-plugins</id>
-      <name>Pentaho Public Plugins</name>
-      <url>https://repo.orl.eng.hitachivantara.com/artifactory/pnt-mvn/</url>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <releases>
-        <updatePolicy>never</updatePolicy>
-      </releases>
+       <id>bmc-nexus</id>
+      <name>BMC Nexus</name>
+      <url>http://clmpunenexus.bmc.com:18080/nexus/content/repositories/thirdparty/RMS/</url>
     </pluginRepository>
   </pluginRepositories>
 

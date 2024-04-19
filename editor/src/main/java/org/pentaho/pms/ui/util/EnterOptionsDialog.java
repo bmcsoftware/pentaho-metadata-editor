@@ -13,6 +13,8 @@
 * See the GNU Lesser General Public License for more details.
 *
 * Copyright (c) 2002-2017 Hitachi Vantara..  All rights reserved.
+* BMC Software, Inc. has modified this file in 2024
+*
 */
 
 package org.pentaho.pms.ui.util;
@@ -57,18 +59,21 @@ import org.pentaho.pms.ui.util.Const;
 
 /**
  * Allows you to set the configurable options for the Pentaho Metadata environment
- * 
+ *
  * @author Matt
  * @since 15-12-2003
  */
 public class EnterOptionsDialog extends Dialog
 {
-	private Display      display; 
+	private Display      display;
 
 	private CTabFolder   wTabFolder;
 	private FormData     fdTabFolder;
 
-	private CTabItem     wLookTab, wGeneralTab;
+	//BMC code starts
+	//private CTabItem     wLookTab, wGeneralTab;
+	private CTabItem     wGeneralTab;
+	//BMC Code ends
 
     private ScrolledComposite sLookComp, sGeneralComp;
 	private Composite    wLookComp, wGeneralComp;
@@ -77,7 +82,7 @@ public class EnterOptionsDialog extends Dialog
 	private FontData     fixedFontData, graphFontData, noteFontData;
 	private Font         fixedFont, graphFont, noteFont;
 
-	private RGB          backgroundRGB, graphColorRGB, tabColorRGB;	
+	private RGB          backgroundRGB, graphColorRGB, tabColorRGB;
 	private Color        background, graphColor, tabColor;
 
 	private Label        wlFFont;
@@ -126,7 +131,7 @@ public class EnterOptionsDialog extends Dialog
 	private Label        wlMaxUndo;
 	private Text         wMaxUndo;
 	private FormData     fdlMaxUndo, fdMaxUndo;
-    
+
     private Label        wlDefaultPreview;
     private Text         wDefaultPreview;
     private FormData     fdlDefaultPreview, fdDefaultPreview;
@@ -135,7 +140,7 @@ public class EnterOptionsDialog extends Dialog
 	private Label        wlMiddlePct;
 	private Text         wMiddlePct;
 	private FormData     fdlMiddlePct, fdMiddlePct;
-    
+
     private Label        wlAntiAlias;
     private Button       wAntiAlias;
     private FormData     fdlAntiAlias, fdAntiAlias;
@@ -149,7 +154,7 @@ public class EnterOptionsDialog extends Dialog
 	private Button       wShowTips;
 	private FormData     fdlShowTips, fdShowTips;
     */
-    
+
 	private Label        wlUseCache;
 	private Button       wUseCache;
 	private FormData     fdlUseCache, fdUseCache;
@@ -157,7 +162,7 @@ public class EnterOptionsDialog extends Dialog
 	private Label        wlOpenLast;
 	private Button       wOpenLast;
 	private FormData     fdlOpenLast, fdOpenLast;
-		
+
 	private Label        wlAutoSave;
 	private Button       wAutoSave;
 	private FormData     fdlAutoSave, fdAutoSave;
@@ -166,7 +171,7 @@ public class EnterOptionsDialog extends Dialog
     private Label        wlDBConnXML;
     private Button       wDBConnXML;
     private FormData     fdlDBConnXML, fdDBConnXML;
-    
+
     private Label        wlAskReplaceDB;
     private Button       wAskReplaceDB;
     private FormData     fdlAskReplaceDB, fdAskReplaceDB;
@@ -189,7 +194,7 @@ public class EnterOptionsDialog extends Dialog
     private Button       wShowRep;
     private FormData     fdlShowRep, fdShowRep;
     */
-    
+
     private Label        wlExitWarning;
     private Button       wExitWarning;
     private FormData     fdlExitWarning, fdExitWarning;
@@ -214,7 +219,7 @@ public class EnterOptionsDialog extends Dialog
 	private Shell  shell;
 	private SelectionAdapter lsDef;
 	private PropsUI propsUI;
-	
+
 	public EnterOptionsDialog(Shell parent, PropsUI pr)
 	{
 		super(parent, SWT.NONE);
@@ -230,17 +235,17 @@ public class EnterOptionsDialog extends Dialog
 
 		shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL | SWT.RESIZE );
         propsUI.setLook(shell);
-		
+
 		FormLayout formLayout = new FormLayout ();
 		formLayout.marginWidth  = Const.FORM_MARGIN;
 		formLayout.marginHeight = Const.FORM_MARGIN;
 
 		shell.setLayout(formLayout);
         shell.setText(Messages.getString("EnterOptionsDialog.USER_PME_OPTIONS")); //$NON-NLS-1$
-		
+
 		int middle = propsUI.getMiddlePct();
 		int margin = Const.MARGIN;
-		
+
 		int h = 40;
 
 		wTabFolder = new CTabFolder(shell, SWT.BORDER);
@@ -255,10 +260,10 @@ public class EnterOptionsDialog extends Dialog
 		FormLayout generalLayout = new FormLayout ();
 		generalLayout.marginWidth  = 3;
 		generalLayout.marginHeight = 3;
-		
+
         sGeneralComp = new ScrolledComposite(wTabFolder, SWT.V_SCROLL | SWT.H_SCROLL );
         sGeneralComp.setLayout(new FillLayout());
-        
+
 		wGeneralComp = new Composite(sGeneralComp, SWT.NONE);
 		propsUI.setLook(wGeneralComp);
 		wGeneralComp.setLayout(generalLayout);
@@ -429,7 +434,7 @@ public class EnterOptionsDialog extends Dialog
         fdReplaceDB.right= new FormAttachment(100, 0);
         wReplaceDB.setLayoutData(fdReplaceDB);
          */
-        
+
 		// Show confirmation after save?
 		wlSaveConf=new Label(wGeneralComp, SWT.RIGHT);
 		wlSaveConf.setText(Messages.getString("EnterOptionsDialog.USER_SHOW_SAVE_CONFIRMATION")); //$NON-NLS-1$
@@ -466,7 +471,7 @@ public class EnterOptionsDialog extends Dialog
 		fdAutoSplit.top  = new FormAttachment(wSaveConf, margin);
 		fdAutoSplit.right= new FormAttachment(100, 0);
 		wAutoSplit.setLayoutData(fdAutoSplit);
-        
+
         // Show repository dialog at startup?
         wlShowRep=new Label(wGeneralComp, SWT.RIGHT);
         wlShowRep.setText("Show the repository dialog at startup? ");
@@ -551,15 +556,15 @@ public class EnterOptionsDialog extends Dialog
 		wGeneralComp.setLayoutData(fdGeneralComp);
 
 		wGeneralComp.pack();
-        
+
 		Rectangle bounds = wGeneralComp.getBounds();
-        
+
         sGeneralComp.setContent(wGeneralComp);
         sGeneralComp.setExpandHorizontal(true);
         sGeneralComp.setExpandVertical(true);
         sGeneralComp.setMinWidth(bounds.width);
         sGeneralComp.setMinHeight(bounds.height);
-        
+
         wGeneralTab.setControl(sGeneralComp);
 
 		/////////////////////////////////////////////////////////////
@@ -569,21 +574,23 @@ public class EnterOptionsDialog extends Dialog
 		//////////////////////////
 		// START OF LOOK TAB///
 		///
-		wLookTab=new CTabItem(wTabFolder, SWT.NONE);
+		//BMC code starts
+		/*wLookTab=new CTabItem(wTabFolder, SWT.NONE);
 		wLookTab.setText(Messages.getString("EnterOptionsDialog.USER_LOOK_AND_FEEL")); //$NON-NLS-1$
-		
+		*/
+		//BMC Code ends
         sLookComp = new ScrolledComposite(wTabFolder, SWT.V_SCROLL | SWT.H_SCROLL );
         sLookComp.setLayout(new FillLayout());
-        
+
 		wLookComp = new Composite(sLookComp, SWT.NONE);
         propsUI.setLook(wLookComp);
-		
+
 		FormLayout lookLayout = new FormLayout();
 		lookLayout.marginWidth  = 3;
 		lookLayout.marginHeight = 3;
 		wLookComp.setLayout(lookLayout);
 
-        
+
 		// Fixed font
         int nr = 0;
 		wlFFont=new Label(wLookComp, SWT.RIGHT);
@@ -603,9 +610,9 @@ public class EnterOptionsDialog extends Dialog
         fddFFont.top  = new FormAttachment(0, nr*h + margin);
         fddFFont.bottom  = new FormAttachment(0, (nr+1)*h + margin);
         wdFFont.setLayoutData(fddFFont);
-        wdFFont.addSelectionListener(new SelectionAdapter() 
+        wdFFont.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     fixedFontData = new FontData(Const.FONT_FIXED_NAME, Const.FONT_FIXED_SIZE, Const.FONT_FIXED_TYPE);
                     fixedFont.dispose();
@@ -623,9 +630,9 @@ public class EnterOptionsDialog extends Dialog
 		fdbFFont.top  = new FormAttachment(0, nr*h + margin);
         fdbFFont.bottom  = new FormAttachment(0, (nr+1)*h + margin);
 		wbFFont.setLayoutData(fdbFFont);
-		wbFFont.addSelectionListener(new SelectionAdapter() 
+		wbFFont.addSelectionListener(new SelectionAdapter()
 			{
-				public void widgetSelected(SelectionEvent arg0) 
+				public void widgetSelected(SelectionEvent arg0)
 				{
 					FontDialog fd = new FontDialog(shell);
                     fd.setFontList(new FontData[] { fixedFontData });
@@ -649,15 +656,15 @@ public class EnterOptionsDialog extends Dialog
         fdFFont.top    = new FormAttachment(0, margin);
         fdFFont.bottom = new FormAttachment(0, h    );
         wFFont.setLayoutData(fdFFont);
-        wFFont.addPaintListener(new PaintListener() 
+        wFFont.addPaintListener(new PaintListener()
             {
-                public void paintControl(PaintEvent pe) 
+                public void paintControl(PaintEvent pe)
                 {
                     pe.gc.setFont(fixedFont);
                     Rectangle max = wFFont.getBounds();
                     String name = fixedFontData.getName();
                     Point size = pe.gc.textExtent(name);
-                    
+
                     pe.gc.drawText(name, (max.width-size.x)/2, (max.height-size.y)/2 );
                 }
             }
@@ -682,12 +689,12 @@ public class EnterOptionsDialog extends Dialog
         fddGFont.top  = new FormAttachment(0, nr*h+margin);
         fddGFont.bottom = new FormAttachment(0, (nr+1)*h+margin);
         wdGFont.setLayoutData(fddGFont);
-        wdGFont.addSelectionListener(new SelectionAdapter() 
+        wdGFont.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     graphFont.dispose();
-                    
+
                     graphFontData = propsUI.getDefaultFontData();
                     graphFont = new Font(display, graphFontData);
                     wGFont.redraw();
@@ -703,9 +710,9 @@ public class EnterOptionsDialog extends Dialog
 		fdbGFont.top  = new FormAttachment(0, nr*h+margin);
         fdbGFont.bottom = new FormAttachment(0, (nr+1)*h+margin);
 		wbGFont.setLayoutData(fdbGFont);
-		wbGFont.addSelectionListener(new SelectionAdapter() 
+		wbGFont.addSelectionListener(new SelectionAdapter()
 			{
-				public void widgetSelected(SelectionEvent arg0) 
+				public void widgetSelected(SelectionEvent arg0)
 				{
 					FontDialog fd = new FontDialog(shell);
                     fd.setFontList(new FontData[] { graphFontData });
@@ -729,21 +736,21 @@ public class EnterOptionsDialog extends Dialog
         fdGFont.top    = new FormAttachment(0, nr*h+margin);
         fdGFont.bottom = new FormAttachment(0, (nr+1)*h+margin );
         wGFont.setLayoutData(fdGFont);
-        wGFont.addPaintListener(new PaintListener() 
+        wGFont.addPaintListener(new PaintListener()
             {
-                public void paintControl(PaintEvent pe) 
+                public void paintControl(PaintEvent pe)
                 {
                     pe.gc.setFont(graphFont);
                     Rectangle max = wGFont.getBounds();
                     String name = graphFontData.getName();
                     Point size = pe.gc.textExtent(name);
-                    
+
                     pe.gc.drawText(name, (max.width-size.x)/2, (max.height-size.y)/2 );
                 }
             }
         );
-        
-        
+
+
 
 		// Note font
         nr++;
@@ -764,9 +771,9 @@ public class EnterOptionsDialog extends Dialog
         fddNFont.top = new FormAttachment(0, nr*h + margin);
         fddNFont.bottom = new FormAttachment(0, (nr+1)*h + margin);
 		wdNFont.setLayoutData(fddNFont);
-		wdNFont.addSelectionListener(new SelectionAdapter() 
+		wdNFont.addSelectionListener(new SelectionAdapter()
 			{
-				public void widgetSelected(SelectionEvent arg0) 
+				public void widgetSelected(SelectionEvent arg0)
 				{
 				    noteFontData = propsUI.getDefaultFontData();
 					noteFont.dispose();
@@ -784,14 +791,14 @@ public class EnterOptionsDialog extends Dialog
         fdbNFont.top = new FormAttachment(0, nr*h + margin);
         fdbNFont.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wbNFont.setLayoutData(fdbNFont);
-        wbNFont.addSelectionListener(new SelectionAdapter() 
+        wbNFont.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     FontDialog fd = new FontDialog(shell);
                     fd.setFontList(new FontData[] { noteFontData });
                     FontData newfd = fd.open();
-                    if (newfd != null) 
+                    if (newfd != null)
                     {
                         noteFontData = newfd;
                         noteFont.dispose();
@@ -810,15 +817,15 @@ public class EnterOptionsDialog extends Dialog
         fdNFont.top    = new FormAttachment(0, nr*h + margin);
         fdNFont.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wNFont.setLayoutData(fdNFont);
-        wNFont.addPaintListener(new PaintListener() 
+        wNFont.addPaintListener(new PaintListener()
         {
-                public void paintControl(PaintEvent pe) 
+                public void paintControl(PaintEvent pe)
                 {
                     pe.gc.setFont(noteFont);
                     Rectangle max = wNFont.getBounds();
                     String name = noteFontData.getName();
                     Point size = pe.gc.textExtent(name);
-    
+
                     pe.gc.drawText(
                         name,
                         (max.width - size.x) / 2,
@@ -847,12 +854,12 @@ public class EnterOptionsDialog extends Dialog
         fddBGColor.top = new FormAttachment(0, nr*h + margin);
         fddBGColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wdBGcolor.setLayoutData(fddBGColor);
-        wdBGcolor.addSelectionListener(new SelectionAdapter() 
+        wdBGcolor.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     background.dispose();
-    
+
                     backgroundRGB = new RGB(Const.COLOR_BACKGROUND_RED, Const.COLOR_BACKGROUND_GREEN, Const.COLOR_BACKGROUND_BLUE);
                     background=new Color(display, backgroundRGB);
                     wBGColor.setBackground(background);
@@ -869,14 +876,14 @@ public class EnterOptionsDialog extends Dialog
         fdbBGColor.top = new FormAttachment(0, nr*h + margin);
         fdbBGColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wbBGColor.setLayoutData(fdbBGColor);
-        wbBGColor.addSelectionListener(new SelectionAdapter() 
+        wbBGColor.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     ColorDialog cd = new ColorDialog(shell);
                     cd.setRGB(propsUI.getBackgroundRGB());
                     RGB newbg = cd.open();
-                    if (newbg != null) 
+                    if (newbg != null)
                     {
                         backgroundRGB = newbg;
                         background.dispose();
@@ -899,8 +906,8 @@ public class EnterOptionsDialog extends Dialog
         wBGColor.setLayoutData(fdBGColor);
 
 
-        
-        
+
+
 		// Graph background color
         nr++;
 		wlGrColor = new Label(wLookComp, SWT.RIGHT);
@@ -920,9 +927,9 @@ public class EnterOptionsDialog extends Dialog
         fddGrColor.top = new FormAttachment(0, nr*h + margin);
         fddGrColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wdGrColor.setLayoutData(fddGrColor);
-        wdGrColor.addSelectionListener(new SelectionAdapter() 
+        wdGrColor.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     graphColor.dispose();
 
@@ -942,14 +949,14 @@ public class EnterOptionsDialog extends Dialog
 		fdbGrColor.top = new FormAttachment(0, nr*h + margin);
         fdbGrColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
 		wbGrColor.setLayoutData(fdbGrColor);
-		wbGrColor.addSelectionListener(new SelectionAdapter() 
+		wbGrColor.addSelectionListener(new SelectionAdapter()
 			{
-				public void widgetSelected(SelectionEvent arg0) 
+				public void widgetSelected(SelectionEvent arg0)
 				{
 					ColorDialog cd = new ColorDialog(shell);
 					cd.setRGB(propsUI.getGraphColorRGB());
 					RGB newbg = cd.open();
-					if (newbg != null) 
+					if (newbg != null)
 					{
 						graphColorRGB = newbg;
 						graphColor.dispose();
@@ -991,12 +998,12 @@ public class EnterOptionsDialog extends Dialog
         fddTabColor.top = new FormAttachment(0, nr*h + margin);
         fddTabColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
         wdTabColor.setLayoutData(fddTabColor);
-        wdTabColor.addSelectionListener(new SelectionAdapter() 
+        wdTabColor.addSelectionListener(new SelectionAdapter()
             {
-                public void widgetSelected(SelectionEvent arg0) 
+                public void widgetSelected(SelectionEvent arg0)
                 {
                     tabColor.dispose();
-                    
+
                     tabColorRGB = new RGB(Const.COLOR_TAB_RED, Const.COLOR_TAB_GREEN, Const.COLOR_TAB_BLUE);
                     tabColor=new Color(display, tabColorRGB);
                     wTabColor.setBackground(tabColor);
@@ -1013,14 +1020,14 @@ public class EnterOptionsDialog extends Dialog
 		fdbTabColor.top = new FormAttachment(0, nr*h + margin);
         fdbTabColor.bottom = new FormAttachment(0, (nr+1)*h + margin);
 		wbTabColor.setLayoutData(fdbTabColor);
-		wbTabColor.addSelectionListener(new SelectionAdapter() 
+		wbTabColor.addSelectionListener(new SelectionAdapter()
 			{
-				public void widgetSelected(SelectionEvent arg0) 
+				public void widgetSelected(SelectionEvent arg0)
 				{
 					ColorDialog cd = new ColorDialog(shell);
 					cd.setRGB(propsUI.getTabColorRGB());
 					RGB newbg = cd.open();
-					if (newbg != null) 
+					if (newbg != null)
 					{
 						tabColorRGB = newbg;
 						tabColor.dispose();
@@ -1043,7 +1050,7 @@ public class EnterOptionsDialog extends Dialog
         wTabColor.setLayoutData(fdTabColor);
 
 
-		
+
 		// Iconsize line
 		wlIconsize=new Label(wLookComp, SWT.RIGHT);
 		wlIconsize.setText(Messages.getString("EnterOptionsDialog.USER_ICON_SIZE")); //$NON-NLS-1$
@@ -1115,8 +1122,8 @@ public class EnterOptionsDialog extends Dialog
 		fdMiddlePct.right= new FormAttachment(100, -margin);
 		fdMiddlePct.top  = new FormAttachment(wShadowSize, margin);
 		wMiddlePct.setLayoutData(fdMiddlePct);
-        
-        
+
+
         // Enable anti-aliasing
         wlAntiAlias=new Label(wLookComp, SWT.RIGHT);
         wlAntiAlias.setText(Messages.getString("EnterOptionsDialog.USER_CANVAS_ANTIALIASING_ENABLED")); //$NON-NLS-1$
@@ -1152,7 +1159,7 @@ public class EnterOptionsDialog extends Dialog
         fdOriginalLook.top  = new FormAttachment(wAntiAlias, margin);
         fdOriginalLook.right= new FormAttachment(100, 0);
         wOriginalLook.setLayoutData(fdOriginalLook);
-        
+
         /*
         // DefaultLocale line
         wlDefaultLocale=new Label(wLookComp, SWT.RIGHT);
@@ -1204,18 +1211,18 @@ public class EnterOptionsDialog extends Dialog
 		fdLookComp.top   = new FormAttachment(0, 0);
 		fdLookComp.bottom= new FormAttachment(100, 100);
 		wLookComp.setLayoutData(fdLookComp);
-	
+
 		wLookComp.pack();
-        
+
         bounds = wLookComp.getBounds();
         sLookComp.setContent(wLookComp);
         sLookComp.setExpandHorizontal(true);
         sLookComp.setExpandVertical(true);
         sLookComp.setMinWidth(bounds.width);
         sLookComp.setMinHeight(bounds.height);
-        
-        wLookTab.setControl(sLookComp);
-
+        //BMC code starts
+       // wLookTab.setControl(sLookComp);
+		//BMC Code ends
 		/////////////////////////////////////////////////////////////
 		/// END OF LOOK TAB
 		/////////////////////////////////////////////////////////////
@@ -1226,9 +1233,9 @@ public class EnterOptionsDialog extends Dialog
 		wOK.setText(Messages.getString("General.USER_OK")); //$NON-NLS-1$
 		wCancel=new Button(shell, SWT.PUSH);
 		wCancel.setText(Messages.getString("General.USER_CANCEL")); //$NON-NLS-1$
-		
+
 		BaseStepDialog.positionBottomButtons(shell, new Button[] { wOK, wCancel }, margin, null);
-		
+
 		fdTabFolder = new FormData();
 		fdTabFolder.left  = new FormAttachment(0, 0);
 		fdTabFolder.top   = new FormAttachment(0, 0);
@@ -1241,14 +1248,14 @@ public class EnterOptionsDialog extends Dialog
 		/////////////////////////////////////////////////////////////
 
 
-		
+
 		// Add listeners
 		lsCancel   = new Listener() { public void handleEvent(Event e) { cancel(); } };
 		lsOK       = new Listener() { public void handleEvent(Event e) { ok();     } };
-		
+
 		wOK.addListener    (SWT.Selection, lsOK     );
 		wCancel.addListener(SWT.Selection, lsCancel );
-		
+
 		lsDef=new SelectionAdapter() { public void widgetDefaultSelected(SelectionEvent e) { ok(); } };
 		wIconsize.addSelectionListener  (lsDef);
 		wLineWidth.addSelectionListener (lsDef);
@@ -1256,12 +1263,12 @@ public class EnterOptionsDialog extends Dialog
 		// wMaxUndo.addSelectionListener   (lsDef);
 		wMiddlePct.addSelectionListener (lsDef);
         // wDefaultPreview.addSelectionListener (lsDef);
-		
+
 		// Detect [X] or ALT-F4 or something that kills this window...
 		shell.addShellListener(	new ShellAdapter() { public void shellClosed(ShellEvent e) { cancel(); } } );
 
 		wTabFolder.setSelection(0);
-		
+
 		BaseStepDialog.setSize(shell);
 
 		shell.open();
@@ -1277,25 +1284,25 @@ public class EnterOptionsDialog extends Dialog
         fixedFont.dispose();
         graphFont.dispose();
         noteFont.dispose();
-        
+
         background.dispose();
         graphColor.dispose();
         tabColor.dispose();
-        
+
 		shell.dispose();
 	}
-	
+
 	public void getData()
 	{
 		fixedFontData = propsUI.getFixedFont();
 		fixedFont = new Font(display, fixedFontData);
-		
+
 		graphFontData = propsUI.getGraphFont();
 		graphFont = new Font(display, graphFontData);
-		
+
 		noteFontData = propsUI.getNoteFont();
 		noteFont = new Font(display, noteFontData);
-		
+
 		backgroundRGB = propsUI.getBackgroundRGB();
 		if (backgroundRGB==null) backgroundRGB = display.getSystemColor(SWT.COLOR_WIDGET_BACKGROUND).getRGB();
         background = new Color(display, backgroundRGB);
@@ -1306,16 +1313,16 @@ public class EnterOptionsDialog extends Dialog
 		tabColorRGB = propsUI.getTabColorRGB();
 		tabColor = new Color(display, tabColorRGB);
 	}
-	
+
 	private void cancel()
 	{
 		propsUI.setScreen(new WindowProperty(shell));
 		propsUI=null;
 		dispose();
 	}
-	
+
 	private void ok()
-	{        
+	{
 		propsUI.setFixedFont     ( fixedFontData );
 		propsUI.setGraphFont     ( graphFontData );
 		propsUI.setNoteFont      ( noteFontData  );
@@ -1326,7 +1333,7 @@ public class EnterOptionsDialog extends Dialog
 		propsUI.setLineWidth     ( Const.toInt(wLineWidth.getText(), propsUI.getLineWidth() ));
 		propsUI.setShadowSize    ( Const.toInt(wShadowSize.getText(), propsUI.getShadowSize() ));
 		propsUI.setMiddlePct     ( Const.toInt(wMiddlePct.getText(), propsUI.getMiddlePct() ));
-        
+
         // propsUI.setDefaultPreviewSize( Const.toInt( wDefaultPreview.getText(), propsUI.getDefaultPreviewSize() ));
 
 		// propsUI.setMaxUndo                             ( Const.toInt(wMaxUndo.getText(), propsUI.getMaxUndo() ));
@@ -1346,7 +1353,7 @@ public class EnterOptionsDialog extends Dialog
 
         /*
         int defaultLocaleIndex = wDefaultLocale.getSelectionIndex();
-        if ( defaultLocaleIndex < 0 || 
+        if ( defaultLocaleIndex < 0 ||
              defaultLocaleIndex >= GlobalMessages.localeCodes.length )
         {
         	// Code hardening, when the combo-box ever gets in a strange state,
@@ -1359,14 +1366,14 @@ public class EnterOptionsDialog extends Dialog
         {
         	failoverLocaleIndex = 0;
         }
-       
+
         LanguageChoice.getInstance().setDefaultLocale( new Locale( GlobalMessages.localeCodes[defaultLocaleIndex]) );
         LanguageChoice.getInstance().setFailoverLocale( new Locale( GlobalMessages.localeCodes[failoverLocaleIndex]) );
         LanguageChoice.getInstance().saveSettings();
         */
-        
+
         propsUI.saveProps();
-        
+
 		dispose();
 	}
 }

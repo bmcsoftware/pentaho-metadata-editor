@@ -341,7 +341,7 @@ public class CategoryEditorDialog extends TitleAreaDialog {
   }
 
   protected Point getInitialSize() {
-    return new Point(662, 420);
+    return new Point(962, 630);
   }
 
   protected void createButtonsForButtonBar(Composite parent) {

@@ -13,38 +13,70 @@ REM This program is distributed in the hope that it will be useful, but WITHOUT 
 REM without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 REM See the GNU Lesser General Public License for more details.
 REM
-REM Copyright (c) 2013 - ${copyright.year} Hitachi Vantara. All rights reserved.
+REM Copyright (c) 2013 - 2022 Hitachi Vantara. All rights reserved.
 
-echo MetaDataDebug is to support you in finding unusual errors and start problems.
-echo -
+REM MetaDataDebug is to support you in finding unusual errors and start problems.
+echo Opening up BMC reporting admin console with debug mode 'ON'
 
 REM this will always output the the system console using the debug mode
 set CONSOLE=1
 
-echo This starts MetaData Editor with a console output with the following options:
-echo -
-echo Pause after the termination?
-echo (helps in finding start problems and unusual crashes of the JVM)
-choice /C NYC /N /M "Pause? (Y=Yes, N=No, C=Cancel)"
-if errorlevel == 3 exit
-if errorlevel == 2 set PAUSE=1
+REM This starts MetaData Editor(Admin module) with a console output with the following options:
 
-echo -
-echo Set logging level to Debug? (default: Basic logging)
-choice /C NYC /N /M "Debug? (Y=Yes, N=No, C=Cancel)"
-if errorlevel == 3 exit
-if errorlevel == 2 set DEBUG_OPTIONS=/level:Debug
+set access_key=
+set secret=
+if exist env.properties (
+    if exist profile.properties (
+        For /F "tokens=1* delims==" %%A IN (profile.properties) DO (
+            IF "%%A"=="KEY" set access_key=%%B
+            IF "%%A"=="SECRET" set secret=%%B 
+        )
+    ) else (
+        echo global profile file doesn't exist
+    )
+) else (
+    echo env file doesn't exist
+    timeout 5 > NUL
+    EXIT
+)
 
-echo -
-echo Redirect console output to metaDataEditorDebug.txt in the actual metadata-editor directory?
-choice /C NYC /N /M "Redirect to metaDataEditorDebug.txt? (Y=Yes, N=No, C=Cancel)"
-if errorlevel == 3 exit
-if errorlevel == 2 set REDIRECT=1
-REM We need to disable the pause in this case otherwise the user does not see the pause message
-if errorlevel == 2 set PAUSE=
+set REDIRECT=1
+set PAUSE=
+set DEBUG_OPTIONS=/level:Debug
 
-echo -
-echo Launching metadata-editor: "%~dp0metadata-editor.bat" %OPTIONS%
-if not "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS%
-if "%REDIRECT%"=="1" echo Console output gets redirected to "%~dp0metaDataEditorDebug.txt"
-if "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS% >>"%~dp0metaDataEditorDebug.txt"
+CALL :TRIM access_key
+CALL :TRIM secret
+
+IF "%access_key%" NEQ "" IF "%secret%" NEQ ""   (
+    echo Using global credential information from profile.properties
+
+    set USERKEY=%access_key%
+    set USERSECRET=%secret%
+    
+    if not "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS%
+    if "%REDIRECT%"=="1" echo Console output gets redirected to "%~dp0metaDataEditorDebug.txt"
+    if "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS% >>"%~dp0metaDataEditorDebug.txt"
+) 
+
+IF "%access_key%" == "" IF "%secret%" == "" (
+    echo No global credential information found, so prompting for credentials
+    echo -
+    
+    set /P USERKEY=Enter your access_key:
+    set /P USERSECRET=Enter your access_secret_key:
+
+    if not "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS%
+    if "%REDIRECT%"=="1" echo Console output gets redirected to "%~dp0metaDataEditorDebug.txt"
+    if "%REDIRECT%"=="1" "%~dp0metadata-editor.bat" %OPTIONS% >>"%~dp0metaDataEditorDebug.txt"
+)
+
+
+:TRIM
+SetLocal EnableDelayedExpansion
+ Call :TRIMSUB %%%1%%
+  EndLocal & set %1=%tempvar%
+  GOTO :EOF
+  
+ :TRIMSUB
+  set tempvar=%*
+  GOTO :EOF  
