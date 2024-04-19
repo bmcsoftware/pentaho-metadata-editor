@@ -11,11 +11,11 @@
 @REM without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 @REM See the GNU Lesser General Public License for more details.
 @REM
-@REM Copyright (c) ${license.inception.year} - ${copyright.year} Hitachi Vantara. All rights reserved.
+@REM Copyright (c) 2002 - 2022 Hitachi Vantara. All rights reserved.
 
-REM ${project.name}
-REM ${project.version}
-REM Copyright © ${license.inception.year} - ${copyright.year} ${project.organization.name}
+REM pme-ce
+REM 9.6.0.0-SNAPSHOT
+REM Copyright © 2002 - 2022 Hitachi Vantara
 REM Classpath is built by launcher. See ..\launcher\launcher.properties.
 
 @echo off
@@ -29,6 +29,7 @@ if not "%CONSOLE%"=="1" set PENTAHO_JAVA=javaw
 set IS64BITJAVA=0
 
 call "%~dp0set-pentaho-env.bat"
+
 
 REM **************************************************
 REM   Platform Specific SWT       **
@@ -113,10 +114,14 @@ REM ***************
 REM ** Run...    **
 REM ***************
 
-REM Eventually call java instead of javaw and do not run in a separate window
-if not "CONSOLE%"=="1" set START_OPTION=start "Pentaho Metadata Editor"
+set OPT=%OPT% "--add-opens=java.base/sun.net.www.protocol.jar=ALL-UNNAMED" 
 
-@echo on
-%START_OPTION% "%_PENTAHO_JAVA%" %OPT% -jar launcher\pentaho-application-launcher.jar -lib ..\%LIBSPATH% %_cmdline%
+REM Eventually call java instead of javaw and do not run in a separate window
+if not "CONSOLE%"=="1" set START_OPTION=start "Reporting Metadata Studio"
+
+echo Command is: "%_PENTAHO_JAVA%" %OPT% -jar launcher\pentaho-application-launcher.jar -lib ..\%LIBSPATH% %_cmdline% -key=hidden-key -secret=hidden-secret
+
+@echo off
+"%_PENTAHO_JAVA%" %OPT% -jar launcher\pentaho-application-launcher.jar -lib ..\%LIBSPATH% %_cmdline% -key=%USERKEY% -secret=%USERSECRET%
 @echo off
 if "%PAUSE%"=="1" pause

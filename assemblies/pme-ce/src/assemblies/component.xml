@@ -3,20 +3,10 @@
     <fileSet>
       <directory>${project.basedir}/src/main/resources-filtered</directory>
       <outputDirectory>.</outputDirectory>
-      <filtered>true</filtered>
-      <includes>
-        <include>**/*.sh</include>
-        <include>**/*.command</include>
-      </includes>
-      <fileMode>0755</fileMode>
-    </fileSet>
-    <fileSet>
-      <directory>${project.basedir}/src/main/resources-filtered</directory>
-      <outputDirectory>.</outputDirectory>
-      <filtered>true</filtered>
       <excludes>
         <exclude>**/*.sh</exclude>
         <exclude>**/*.command</exclude>
+        <exclude>**/metadata*.bat</exclude>
       </excludes>
     </fileSet>
     <fileSet>
@@ -28,8 +18,19 @@
       <outputDirectory>.</outputDirectory>
     </fileSet>
     <fileSet>
-      <directory>src/main/resources</directory>
+      <directory>${project.basedir}/src/main/resources</directory>
       <outputDirectory>.</outputDirectory>
+       
+      <excludes>
+        <exclude>**/FileBased.properties</exclude>
+        <exclude>**/H2.properties</exclude>
+        <exclude>**/Hsqldb.properties</exclude>
+        <exclude>**/Hsqldb1.8.properties</exclude>
+        <exclude>**/memory.properties</exclude>
+        <exclude>**/MySQL.properties</exclude>
+        <exclude>**/PostgreSQL.properties</exclude>
+        <exclude>**/jdbc.properties</exclude>                   
+      </excludes>
     </fileSet>
     <fileSet>
       <directory>${project.build.directory}/plugins</directory>
@@ -38,6 +39,22 @@
     <fileSet>
       <directory>${project.build.directory}/oss-licenses</directory>
       <outputDirectory>.</outputDirectory>
+    </fileSet>
+    <fileSet>
+      <directory>${project.basedir}/src/main/resources-bmc</directory>
+      <outputDirectory>bmcauthconfiguration</outputDirectory>
+      <includes>
+         <include>**/env.properties</include>
+         <include>**/profile.properties</include>
+      </includes>
+    </fileSet>
+    <fileSet>
+      <directory>${project.basedir}/src/main/resources-bmc</directory>
+      <outputDirectory>/</outputDirectory>
+      <excludes>
+         <exclude>**/env.properties</exclude>
+         <exclude>**/profile.properties</exclude>
+      </excludes>
     </fileSet>
   </fileSets>
 </component>

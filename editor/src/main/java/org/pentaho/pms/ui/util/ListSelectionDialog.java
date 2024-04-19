@@ -13,6 +13,7 @@
 * See the GNU Lesser General Public License for more details.
 *
 * Copyright (c) 2002-2017 Hitachi Vantara..  All rights reserved.
+* BMC Software, Inc. has modified this file in 2024
 */
 
 package org.pentaho.pms.ui.util;
@@ -38,7 +39,7 @@ import org.eclipse.swt.widgets.Shell;
 
 public class ListSelectionDialog extends TitleAreaDialog {
 
-  // ~ Static fields/initializers ====================================================================================== 
+  // ~ Static fields/initializers ======================================================================================
 
   private static final Log logger = LogFactory.getLog(ListSelectionDialog.class);
 
@@ -100,7 +101,7 @@ public class ListSelectionDialog extends TitleAreaDialog {
   }
 
   protected Point getInitialSize() {
-    return new Point(400, 235);
+    return new Point(690, 480);
   }
 
   public Object getSelection() {

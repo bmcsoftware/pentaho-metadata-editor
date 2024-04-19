@@ -13,12 +13,29 @@
  * See the GNU Lesser General Public License for more details.
  *
  * Copyright (c) 2002-2020 Hitachi Vantara..  All rights reserved.
+ * BMC Software, Inc. has modified this file in 2024
  */
 
 package org.pentaho.pms.ui;
 
+import com.google.gson.Gson;
+
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.viewers.StructuredSelection;
@@ -29,56 +46,25 @@ import org.eclipse.swt.custom.BusyIndicator;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.SashForm;
-import org.eclipse.swt.dnd.DND;
-import org.eclipse.swt.dnd.DragSource;
-import org.eclipse.swt.dnd.DragSourceEvent;
-import org.eclipse.swt.dnd.DragSourceListener;
-import org.eclipse.swt.dnd.DropTarget;
-import org.eclipse.swt.dnd.DropTargetEvent;
-import org.eclipse.swt.dnd.DropTargetListener;
-import org.eclipse.swt.dnd.Transfer;
-import org.eclipse.swt.events.DisposeEvent;
-import org.eclipse.swt.events.DisposeListener;
-import org.eclipse.swt.events.KeyAdapter;
-import org.eclipse.swt.events.KeyEvent;
-import org.eclipse.swt.events.SelectionAdapter;
-import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.SelectionListener;
-import org.eclipse.swt.events.ShellAdapter;
-import org.eclipse.swt.events.ShellEvent;
-import org.eclipse.swt.graphics.Color;
-import org.eclipse.swt.graphics.GC;
-import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.graphics.ImageData;
-import org.eclipse.swt.graphics.PaletteData;
-import org.eclipse.swt.graphics.RGB;
-import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.dnd.*;
+import org.eclipse.swt.events.*;
+import org.eclipse.swt.graphics.*;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.printing.Printer;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Display;
-import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.FileDialog;
-import org.eclipse.swt.widgets.Listener;
-import org.eclipse.swt.widgets.Menu;
-import org.eclipse.swt.widgets.MenuItem;
-import org.eclipse.swt.widgets.MessageBox;
-import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.ToolBar;
-import org.eclipse.swt.widgets.ToolItem;
-import org.eclipse.swt.widgets.Tree;
-import org.eclipse.swt.widgets.TreeColumn;
-import org.eclipse.swt.widgets.TreeItem;
+import org.eclipse.swt.widgets.*;
 import org.pentaho.di.core.DBCache;
 import org.pentaho.di.core.KettleEnvironment;
 import org.pentaho.di.core.LastUsedFile;
 import org.pentaho.di.core.Props;
+import org.pentaho.di.core.RowMetaAndData;
+import org.pentaho.di.core.row.ValueMetaInterface;
 import org.pentaho.di.core.database.BaseDatabaseMeta;
 import org.pentaho.di.core.database.Database;
 import org.pentaho.di.core.database.DatabaseMeta;
+import org.pentaho.di.core.database.GenericDatabaseMeta;
 import org.pentaho.di.core.dnd.DragAndDropContainer;
 import org.pentaho.di.core.dnd.XMLTransfer;
 import org.pentaho.di.core.exception.KettleDatabaseException;
@@ -88,18 +74,25 @@ import org.pentaho.di.core.logging.LogChannel;
 import org.pentaho.di.core.logging.LogChannelInterface;
 import org.pentaho.di.core.logging.LogLevel;
 import org.pentaho.di.core.row.RowMetaInterface;
-import org.pentaho.di.core.row.ValueMetaInterface;
 import org.pentaho.di.ui.core.PrintSpool;
 import org.pentaho.di.ui.core.PropsUI;
 import org.pentaho.di.ui.core.database.dialog.DatabaseDialog;
 import org.pentaho.di.ui.core.database.dialog.DatabaseExplorerDialog;
 import org.pentaho.di.ui.core.database.dialog.SQLEditor;
 import org.pentaho.di.ui.core.dialog.EnterSelectionDialog;
+import org.pentaho.di.ui.core.dialog.EnterReadOnlyKeysWritableValuesDialog;
 import org.pentaho.di.ui.core.dialog.EnterStringDialog;
 import org.pentaho.di.ui.core.dialog.EnterTextDialog;
 import org.pentaho.di.ui.core.dialog.ErrorDialog;
 import org.pentaho.di.ui.core.gui.WindowProperty;
 import org.pentaho.di.ui.core.widget.TreeMemory;
+import org.pentaho.pms.bmc.entrypoint.AuthenticationMonitor;
+import org.pentaho.pms.bmc.entrypoint.BMCAuthenticatorForPentaho;
+import org.pentaho.pms.bmc.entrypoint.beans.TenantInfoList;
+import org.pentaho.pms.bmc.entrypoint.beans.TenantInfoList.TenantInfo;
+import org.pentaho.pms.bmc.entrypoint.beans.UserSessionObject;
+import org.pentaho.pms.bmc.entrypoint.exceptions.RMSAuthorizationException;
+import org.pentaho.pms.bmc.entrypoint.exceptions.RMStudioException;
 import org.pentaho.pms.core.CWM;
 import org.pentaho.pms.core.exception.CWMException;
 import org.pentaho.pms.factory.CwmSchemaFactoryInterface;
@@ -107,14 +100,7 @@ import org.pentaho.pms.locale.LocaleInterface;
 import org.pentaho.pms.locale.Locales;
 import org.pentaho.pms.mql.MQLQuery;
 import org.pentaho.pms.mql.MQLQueryFactory;
-import org.pentaho.pms.schema.BusinessCategory;
-import org.pentaho.pms.schema.BusinessColumn;
-import org.pentaho.pms.schema.BusinessModel;
-import org.pentaho.pms.schema.BusinessTable;
-import org.pentaho.pms.schema.PhysicalColumn;
-import org.pentaho.pms.schema.PhysicalTable;
-import org.pentaho.pms.schema.RelationshipMeta;
-import org.pentaho.pms.schema.SchemaMeta;
+import org.pentaho.pms.schema.*;
 import org.pentaho.pms.schema.concept.ConceptInterface;
 import org.pentaho.pms.schema.concept.ConceptPropertyInterface;
 import org.pentaho.pms.schema.concept.ConceptUtilityBase;
@@ -125,62 +111,52 @@ import org.pentaho.pms.schema.concept.types.fieldtype.FieldTypeSettings;
 import org.pentaho.pms.schema.concept.types.tabletype.TableTypeSettings;
 import org.pentaho.pms.schema.security.SecurityReference;
 import org.pentaho.pms.schema.security.SecurityService;
-import org.pentaho.pms.ui.concept.editor.ConceptEditorDialog;
-import org.pentaho.pms.ui.concept.editor.ConceptTreeModel;
-import org.pentaho.pms.ui.concept.editor.Constants;
-import org.pentaho.pms.ui.concept.editor.IConceptTreeModel;
-import org.pentaho.pms.ui.concept.editor.PredefinedVsCustomPropertyHelper;
-import org.pentaho.pms.ui.dialog.BusinessCategoryDialog;
-import org.pentaho.pms.ui.dialog.BusinessModelDialog;
-import org.pentaho.pms.ui.dialog.BusinessTableDialog;
-import org.pentaho.pms.ui.dialog.CategoryEditorDialog;
-import org.pentaho.pms.ui.dialog.PhysicalTableDialog;
-import org.pentaho.pms.ui.dialog.PublishDialog;
-import org.pentaho.pms.ui.dialog.RelationshipDialog;
+import org.pentaho.pms.ui.concept.editor.*;
+import org.pentaho.pms.ui.dialog.*;
 import org.pentaho.pms.ui.jface.tree.ITreeNode;
 import org.pentaho.pms.ui.jface.tree.ITreeNodeChangedListener;
 import org.pentaho.pms.ui.jface.tree.TreeContentProvider;
 import org.pentaho.pms.ui.locale.Messages;
 import org.pentaho.pms.ui.security.SecurityDialog;
-import org.pentaho.pms.ui.tree.BusinessColumnTreeNode;
-import org.pentaho.pms.ui.tree.BusinessModelTreeNode;
-import org.pentaho.pms.ui.tree.BusinessModelsTreeNode;
-import org.pentaho.pms.ui.tree.BusinessTableTreeNode;
-import org.pentaho.pms.ui.tree.BusinessTablesTreeNode;
-import org.pentaho.pms.ui.tree.BusinessViewTreeNode;
-import org.pentaho.pms.ui.tree.CategoryTreeNode;
-import org.pentaho.pms.ui.tree.ConceptLabelProvider;
-import org.pentaho.pms.ui.tree.ConceptTreeNode;
-import org.pentaho.pms.ui.tree.ConnectionsTreeNode;
-import org.pentaho.pms.ui.tree.DatabaseMetaTreeNode;
-import org.pentaho.pms.ui.tree.LabelTreeNode;
-import org.pentaho.pms.ui.tree.PhysicalColumnTreeNode;
-import org.pentaho.pms.ui.tree.PhysicalTableTreeNode;
-import org.pentaho.pms.ui.tree.RelationshipTreeNode;
-import org.pentaho.pms.ui.tree.RelationshipsTreeNode;
-import org.pentaho.pms.ui.tree.SchemaMetaTreeNode;
+import org.pentaho.pms.ui.tree.*;
 import org.pentaho.pms.ui.util.Const;
-import org.pentaho.pms.ui.util.EnterOptionsDialog;
-import org.pentaho.pms.ui.util.GUIResource;
-import org.pentaho.pms.ui.util.ListSelectionDialog;
-import org.pentaho.pms.ui.util.Splash;
-import org.pentaho.pms.util.FileUtil;
-import org.pentaho.pms.util.ObjectAlreadyExistsException;
-import org.pentaho.pms.util.Settings;
-import org.pentaho.pms.util.UniqueArrayList;
-import org.pentaho.pms.util.UniqueList;
-import org.pentaho.pms.util.VersionHelper;
+import org.pentaho.pms.ui.util.*;
+import org.pentaho.pms.util.*;
+import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathFactory;
+
+import java.io.*;
+import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+//BMC
+
 
 /**
  * Class to edit the metadata domain (Schema Metadata), load/store into the MDR/CWM model
@@ -188,6 +164,14 @@ import java.util.Set;
  * @since 16-may-2003
  */
 public class MetaEditor implements SelectionListener {
+	//BMC code starts
+  public static final String BMC_AR_JDBC_DRIVER = "com.bmc.arsys.jdbc.core.Driver";
+  private final String DOC_TYPE_URL = "http://apache.org/xml/features/disallow-doctype-decl";
+  private final String GENERAL_ENTITIES_URL = "http://xml.org/sax/features/external-general-entities";
+  private final String LOAD_EXTERNAL_DTD_URL = "http://apache.org/xml/features/nonvalidating/load-external-dtd";
+  private final String EXTERNAL_PARAMETER_ENTITIES_URL = "http://xml.org/sax/features/external-parameter-entities";
+  private static final String ENTITY_EXPANSION_LIMIT = "http://www.oracle.com/xml/jaxp/properties/entityExpansionLimit";
+  //BMC code ends
   private CWM cwm;
 
   private LogChannelInterface log;
@@ -224,8 +208,11 @@ public class MetaEditor implements SelectionListener {
 
   private Menu msFile;
 
-  private MenuItem miFileOpen, miFileNew, miFileSave, miFileSaveAs, miFileExport, miPublish, miFileImport,
-    miFileDelete, miFilePrint, miFileSep3, miFileQuit;
+  //BMC code starts
+ // private MenuItem miFileOpen, miFileNew, miFileSave, miFileSaveAs, miFileExport, miPublish, miFileImport,
+  //BMC code ends
+  private MenuItem miFileOpen, miFileNew, miFileSave, miFileSaveAs,
+    miFileDelete, miXMIDelete, miFilePrint, miFileSep3, miFileQuit, miExportToStorage, miImportFromStorage;
 
   private MenuItem miNewDomain, miNewConnection, miNewPTable, miNewBTable, miNewBModel, miNewRel, miNewCat;
 
@@ -233,9 +220,9 @@ public class MetaEditor implements SelectionListener {
     miNewCatTB;
 
   private Listener lsDomainNew, lsConnectionNew, lsPTableNew, lsBTableNew, lsBModelNew, lsRelationNew, lsCategoryNew,
-    lsFileOpen, lsFileSave, lsFileSaveAs, lsFileExport, lsPublish, lsFileImport, lsFileDelete, lsFilePrint,
+    lsFileOpen, lsFileSave, lsFileSaveAs, lsFileExport, lsFileImport, lsFileDelete, lsXMIDelete, lsFilePrint,
     lsFileQuit, lsEditLocales, lsEditConcepts, lsEditCategories, lsAlignRight, lsAlignLeft, lsAlignTop,
-    lsAlignBottom, lsDistribHoriz, lsDistribVert;
+    lsAlignBottom, lsDistribHoriz, lsDistribVert, lsExportToStorage, lsImportFromStorage;
 
   private MenuItem mEdit;
 
@@ -251,7 +238,7 @@ public class MetaEditor implements SelectionListener {
 
   private MenuItem mHelp;
 
-  private Menu msHelp;
+  private Menu msHelp, exportMenu;
 
   private MenuItem miHelpAbout;
 
@@ -275,6 +262,14 @@ public class MetaEditor implements SelectionListener {
 
   public static final String STRING_CATEGORIES_TREE = "CategoriesTree"; //$NON-NLS-1$
 
+  //BMC code starts
+  public static final String STORAGE_API = "/reportingmetadata/api/v1/storage/files";
+  public static final String STORAGE_DOWNLOAD_API = "/reportingmetadata/api/v1/storage/files/download";
+  public static final String OOTB_XMI_LABEL = "[OOTB] ";
+
+  private ListFilesResponse listFilesResponse;
+  //BMC code ends
+
   private TreeViewer treeViewer;
 
   private SchemaMetaTreeNode mainTreeNode;
@@ -292,10 +287,11 @@ public class MetaEditor implements SelectionListener {
   private MenuItem mTools;
 
   private Menu msTools;
-
-  private MenuItem miSecurityService, miLocalesEditor, miConceptEditor, miCategoryEditor, miLogging;
-
-  private Listener lsSecurityService;
+  //BMC code starts
+  //private MenuItem miSecurityService, miLocalesEditor, miConceptEditor, miCategoryEditor, miLogging;
+  private MenuItem  miCategoryEditor, miLogging;
+  //private Listener lsSecurityService;
+  //BMC Code ends
 
   private CwmSchemaFactoryInterface cwmSchemaFactory;
 
@@ -346,6 +342,9 @@ public class MetaEditor implements SelectionListener {
     initMenu();
     initTree();
     initTabs();
+    //BMC code starts
+    initProperties();
+    //BMC code ends
 
     // In case someone dares to press the [X] in the corner ;-)
     shell.addShellListener( new ShellAdapter() {
@@ -371,6 +370,23 @@ public class MetaEditor implements SelectionListener {
       }
     } );
   }
+
+  //BMC code starts
+  private void initProperties() {
+    Properties rssoProperties = new Properties();
+    Path path = Paths.get( TenantInfoList.CONFIG_BASE_PATH + TenantInfoList.ENV_FILE_NAME );
+
+    if (path == null || path.toFile().exists()) {
+      try (InputStream inStream = Files.newInputStream( path )) {
+        rssoProperties.load( inStream );
+      } catch (IOException e) {
+        throw new RMStudioException(Messages.getString("ERROR.RS-003.CONFIG_FILE_CORRUPTED"), e);
+      }
+    } else {
+      throw new RMStudioException(Messages.getString("ERROR.RS-004.CONFIG_FILE_NOT_FOUND"));
+    }
+  }
+  //BMC code ends
 
   private void initGlobalKeyBindings() {
     defKeys = new KeyAdapter() {
@@ -432,10 +448,12 @@ public class MetaEditor implements SelectionListener {
         }
 
         // CTRL-E --> Select All steps
-        if ( e.character == 5 && control && !alt ) {
-          exportToXMI();
-          metaEditorGraph.control = false;
-        }
+        //BMC code starts
+//        if ( e.character == 5 && control && !alt ) {
+//          exportToXMI();
+//          metaEditorGraph.control = false;
+//        }
+        //BMC code ends
 
         // CTRL-I --> Select All steps
         if ( e.character == 9 && control && !alt ) {
@@ -547,21 +565,29 @@ public class MetaEditor implements SelectionListener {
         exportToXMI();
       }
     };
-    lsPublish = new Listener() {
-      public void handleEvent( Event e ) {
-        publishXmi();
-      }
-    };
+
     lsFileImport = new Listener() {
       public void handleEvent( Event e ) {
         importFromXMI();
       }
     };
+    //BMC code starts
+    lsImportFromStorage = (event)-> importFromStorage();
+    lsExportToStorage = (event)-> exportToStorage();
+    //BMC code ends
+
     lsFileDelete = new Listener() {
       public void handleEvent( Event e ) {
         deleteFile();
       }
     };
+    //BMC code starts
+    lsXMIDelete = new Listener() {
+      public void handleEvent(Event e) {
+        deleteXMI();
+      }
+    };
+    //BMC code ends
     lsFilePrint = new Listener() {
       public void handleEvent( Event e ) {
         printFile();
@@ -597,11 +623,13 @@ public class MetaEditor implements SelectionListener {
         refreshAll();
       }
     };
-    lsSecurityService = new Listener() {
+    //BMC code starts
+    /*lsSecurityService = new Listener() {
       public void handleEvent( Event e ) {
         editSecurityService();
       }
-    };
+    };*/
+    //BMC code ends
     lsEditLocales = new Listener() {
       public void handleEvent( Event e ) {
         tabfolder.setSelection( 1 );
@@ -657,6 +685,635 @@ public class MetaEditor implements SelectionListener {
     };
   }
 
+  //BMC code starts
+  private Boolean configureEnvForViewPublishing() {
+     Boolean keepProgressing = null;
+     RowMetaAndData publishConfigArgs = new RowMetaAndData();
+     publishConfigArgs.addValue("Tenant id", SWT.NONE, TenantInfoList.TENANT_ID );
+     publishConfigArgs.addValue("Tenant url", SWT.NONE, TenantInfoList.TENANT_URL );
+     publishConfigArgs.addValue("Environment Alias", SWT.NONE, TenantInfoList.ENV_ALIAS );
+
+     RowMetaAndData arConfigArgs = new RowMetaAndData();
+     arConfigArgs.addValue("AR host", SWT.NONE, TenantInfoList.AR_HOST );
+     arConfigArgs.addValue("AR RPC port", SWT.NONE, TenantInfoList.AR_RPC_PORT );
+     arConfigArgs.addValue("AR REST endpoint", SWT.NONE, TenantInfoList.REST_ENDPOINT );
+
+  	 org.pentaho.pms.ui.dialog.TenantInfoDialog configDialog = new org.pentaho.pms.ui.dialog.TenantInfoDialog(shell, SWT.NONE, publishConfigArgs, arConfigArgs);
+
+  	 configDialog.setText( Messages.getString( "MetaEditor.USER_KEY_SECRET_PROMPT" ) );
+  	 configDialog.setTitle( Messages.getString("MetaEditor.CONFIGURE_ENV") );
+  	 RowMetaAndData returnedValue = configDialog.open();
+  	 if (returnedValue != null) {
+     }
+ 	return keepProgressing;
+}
+
+    private Boolean createSessionBeforePromotingView(TenantInfo tenantInfo) {
+    	if (!AuthenticationMonitor.envToIMSJwtTokenMap.containsKey( tenantInfo.getTenantId() )) {
+    	    Boolean keepProgressing = null;
+    		RowMetaAndData allArgs = new RowMetaAndData();
+
+            allArgs.addValue("Enter access key:", SWT.NONE, "Credential Key");
+    		allArgs.addValue("Enter secret key:", SWT.NONE, "Credential Secret");
+    	   	EnterReadOnlyKeysWritableValuesDialog pwdDialog = new EnterReadOnlyKeysWritableValuesDialog(shell, SWT.NONE, allArgs);
+    		pwdDialog.setText( Messages.getString( "MetaEditor.USER_KEY_SECRET_PROMPT" ) );
+    		pwdDialog.setTitle( Messages.getString( "MetaEditor.USER_BMC_AUTH" ) + " for tenant identified by alias '" + tenantInfo.getTenantId() + "'");
+    		RowMetaAndData returnedValue = pwdDialog.open();
+    		if (returnedValue != null) {
+    		    try {
+    			    ValueMetaInterface userKeyPlaceHolder = returnedValue.getRowMeta().getValueMeta( 0 );
+    				Object userKeyData = returnedValue.getData()[0];
+    				String userKey = userKeyPlaceHolder.getString( userKeyData );
+
+    				ValueMetaInterface userSecretPlaceHolder = returnedValue.getRowMeta().getValueMeta( 1 );
+    				Object userSecretData = returnedValue.getData()[1];
+    				String userSecret = userSecretPlaceHolder.getString( userSecretData );
+
+    				UserSessionObject authObj = new UserSessionObject();
+    				authObj.setAttribute( "key", userKey );
+    				authObj.setAttribute( "secret", userSecret );
+    			    BMCAuthenticatorForPentaho bmcAuthenticator = BMCAuthenticatorForPentaho.getInstance();
+    				bmcAuthenticator.monitorAuthentication(  tenantInfo, authObj, false );
+    				keepProgressing = true;
+    		    } catch (Exception kve) {
+    		        new ErrorDialog(shell, Messages.getString("MetaEditor.USER_RE_AUTH_STATUS"), //$NON-NLS-1$
+    		                            Messages.getString("MetaEditor.USER_FAILED_AUTH"), kve); //$NON-NLS-2$
+    		        keepProgressing = false;
+    		        log.logError("Exception in handledSessionTimeout ", kve);
+    		    }
+    		}
+    		return keepProgressing;
+    	}
+    	return true;
+	}
+
+  private void exportToTenantStorage(TenantInfo tenantInfo) {
+	  if (createSessionBeforePromotingView( tenantInfo ) ) {
+		  exportToStorage( tenantInfo );
+	  }
+  }
+  //BMC code ends
+  //BMC code starts
+  /**
+   *
+   */
+  private void exportToStorage(TenantInfo tenantInfo) {
+    EnterStringDialog stringDialog = new EnterStringDialog(shell, "", //$NON-NLS-1$
+            Messages.getString("MetaEditor.USER_TITLE_EXPORT_STORAGE"), // $NON-NLS-2$
+            Messages.getString("MetaEditor.USER_ENTER_STORAGE_FILE_NAME", tenantInfo.getTenantId())); // $NON-NLS-3$
+    String userfileName = stringDialog.open();
+    if (null != userfileName) {
+      if (StringUtils.isBlank(userfileName)) {
+        MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
+        mb.setMessage(Messages.getString("MetaEditor.USER_SAVE_HELIX_FILE_EMPTY")); //$NON-NLS-1$
+        mb.setText(Messages.getString("General.USER_TITLE_WARNING")); //$NON-NLS-1$
+        mb.open();
+        return;
+      }
+      String finalUserfileName = userfileName;
+      if (!userfileName.toLowerCase().endsWith(".xmi") && !userfileName.toLowerCase().endsWith(".xml")) {
+        userfileName += ".xmi";
+      }
+      final String fileName = userfileName;
+
+      ArrayList<String> deletedFiles = new ArrayList<>();
+      boolean gotTheNamesFromRMS = getXmiNamesFromRMS(tenantInfo, deletedFiles, Messages.getString("MetaEditor.USER_ERROR_DELETING_XMI"), XMI_TYPES.DELETED);
+
+      if ( gotTheNamesFromRMS ) {
+          AtomicBoolean duplicateFile = new AtomicBoolean(false);
+          if (null != listFilesResponse.getOotb() && listFilesResponse.getOotb().size() > 0) {
+            listFilesResponse.getOotb().forEach(file -> {
+              if (file.equalsIgnoreCase(fileName)) duplicateFile.set(true);
+            });
+          }
+          if (duplicateFile.get()) {
+            MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
+            mb.setMessage(Messages.getString("MetaEditor.USER_SAVE_HELIX_FILE", finalUserfileName)); //$NON-NLS-1$
+            mb.setText(Messages.getString("General.USER_TITLE_WARNING")); //$NON-NLS-1$
+            mb.open();
+            return;
+          }
+
+          AtomicBoolean duplicateCustomFile = new AtomicBoolean(false);
+          if (null != listFilesResponse.getOthers() && listFilesResponse.getOthers().size() > 0) {
+            listFilesResponse.getOthers().forEach(file -> {
+              if (file.equalsIgnoreCase(fileName)) duplicateCustomFile.set(true);
+            });
+          }
+          if (duplicateCustomFile.get()) {
+            MessageBox mb = new MessageBox(shell, SWT.NO | SWT.YES | SWT.ICON_WARNING);
+            mb.setMessage(Messages.getString("MetaEditor.USER_SAVE_HELIX_FILE_CUSTOM", finalUserfileName, tenantInfo.getTenantId())); //$NON-NLS-1$
+            mb.setText(Messages.getString("General.USER_TITLE_WARNING")); //$NON-NLS-1$
+            if (mb.open() != SWT.YES) {
+              return;
+            }
+          }
+
+          AtomicBoolean duplicateDeletedFile = new AtomicBoolean(false);
+          if (null != listFilesResponse.getDeleted() && listFilesResponse.getDeleted().size() > 0) {
+            listFilesResponse.getDeleted().forEach(file -> {
+              if (file.equalsIgnoreCase(fileName)) duplicateDeletedFile.set(true);
+            });
+          }
+          if (duplicateDeletedFile.get()) {
+            MessageBox mb = new MessageBox(shell, SWT.NO | SWT.YES | SWT.ICON_WARNING);
+            mb.setMessage(Messages.getString("MetaEditor.USER_SAVE_HELIX_FILE_DELETED", finalUserfileName)); //$NON-NLS-1$
+            mb.setText(Messages.getString("General.USER_TITLE_WARNING")); //$NON-NLS-1$
+            if (mb.open() != SWT.YES) {
+              return;
+            }
+          }
+
+          boolean goAhead = true;
+          if (Const.isEmpty(schemaMeta.getDomainName())) {
+            MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
+            mb.setMessage(Messages.getString("MetaEditor.USER_NO_NAME_CAN_NOT_EXPORT")); //$NON-NLS-1$
+            mb.setText(Messages.getString("MetaEditor.USER_SORRY")); //$NON-NLS-1$
+            if (mb.open() != SWT.YES) {
+              goAhead = false;
+            }
+          }
+
+          if (schemaMeta.hasChanged()) {
+            MessageBox mb = new MessageBox(shell, SWT.NO | SWT.YES | SWT.ICON_WARNING);
+            mb.setMessage(Messages.getString("MetaEditor.USER_SAVE_DOMAIN")); //$NON-NLS-1$
+            mb.setText(Messages.getString("MetaEditor.USER_CONTINUE")); //$NON-NLS-1$
+            if (mb.open() == SWT.YES) {
+              goAhead = saveFile();
+            } else {
+              goAhead = false;
+            }
+          }
+
+          if (goAhead) {
+              Runnable runnable = () -> {
+                Boolean keepProgressing = null;
+                try {
+                  exportToXMIStorage(tenantInfo, fileName);
+                } catch (RMSAuthorizationException e) {
+                  keepProgressing = handleSessionTimeout(tenantInfo);
+                  if (keepProgressing == null) {
+                    //do nothing
+                  } else {
+                    if (keepProgressing) {
+                      try {
+                        exportToXMIStorage(tenantInfo, fileName);
+                      } catch(Exception ee) {
+                        new ErrorDialog(shell, Messages.getString("General.USER_TITLE_ERROR"), //$NON-NLS-1$
+                                Messages.getString("MetaEditor.USER_ERROR_EXPORTING_XMI"), e); // $NON-NLS-2$
+                      }
+                    }
+                  }
+                } catch (Exception e) {
+                  new ErrorDialog(shell, Messages.getString("General.USER_TITLE_ERROR"), //$NON-NLS-1$
+                          Messages.getString("MetaEditor.USER_ERROR_EXPORTING_XMI"), e); // $NON-NLS-2$
+                }
+              };
+              BusyIndicator.showWhile(Display.getCurrent(), runnable);
+            }
+      }
+    }
+  }
+
+  private void exportToStorage() {
+  }
+
+private void exportToXMIStorage(TenantInfo tenantInfo, final String fileName)
+		throws IOException, RMSAuthorizationException, Exception {
+	Path path = File.createTempFile(fileName, ".xmi").toPath();
+	Path absolutePath = path.toAbsolutePath();
+	String tempFileName = absolutePath.toString();
+	if (!tempFileName.toLowerCase().endsWith(".xmi") && !tempFileName.toLowerCase().endsWith(".xml")) {
+	  tempFileName += ".xmi"; //$NON-NLS-1$
+	}
+	// Get back the result of the last save operation...
+	CWM cwmInstance = CWM.getInstance(schemaMeta.getDomainName());
+	if (cwmInstance != null) {
+	  String xmiString = cwmInstance.getXMI();
+	  List<Exception> exceptionList = new ArrayList<>();
+	  String cleanedXmiString = cleanUpCredentials(xmiString, exceptionList);
+
+	  File file = new File(tempFileName);
+	  file.deleteOnExit();
+	  BufferedWriter bwr = new BufferedWriter(new FileWriter(file));
+	  bwr.write(cleanedXmiString);
+	  bwr.flush();
+	  bwr.close();
+
+	  HttpClient httpClient = HttpClients.createDefault();
+	  HttpPost uploadFileRequest = new HttpPost(tenantInfo.getTenantUrl() + STORAGE_API);
+      if (StringUtils.isBlank(AuthenticationMonitor.envToIMSJwtTokenMap.get( tenantInfo.getTenantId() ))) {
+        throw new RMSAuthorizationException("001", Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+      }
+	  uploadFileRequest.addHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get( tenantInfo.getTenantId() ) );
+	  File f = new File(file.getAbsolutePath());
+	  MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+	  builder.addBinaryBody(
+	          "file",
+	          new FileInputStream(f),
+	          ContentType.APPLICATION_OCTET_STREAM,
+	          fileName
+	  );
+	  builder.addTextBody("tenantId", tenantInfo.getTenantId());
+      AtomicBoolean duplicateDeletedFile = new AtomicBoolean(false);
+      if (null != listFilesResponse.getDeleted() && listFilesResponse.getDeleted().size() > 0) {
+        listFilesResponse.getDeleted().forEach(file1 -> {
+          if (file1.equalsIgnoreCase(fileName)) duplicateDeletedFile.set(true);
+        });
+      }
+      builder.addTextBody("deleted",String.valueOf(duplicateDeletedFile.get()));
+	  HttpEntity multipart = builder.build();
+
+	  uploadFileRequest.setEntity(multipart);
+
+	  HttpResponse response = httpClient.execute(uploadFileRequest);
+	  int statusCode = response.getStatusLine().getStatusCode();
+	  if (statusCode == 200) {
+	    MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION | SWT.CENTER);
+	    mb.setMessage(Messages.getString("MetaEditor.USER_EXPORT_TO_STORAGE_SUCCESS", tenantInfo.getTenantId())); //$NON-NLS-1$
+	    mb.setText(Messages.getString("MetaEditor.USER_HELP_METADATA_EDITOR")); //$NON-NLS-1$
+	    mb.open();
+	  } else if (statusCode == 401) {
+		  throw new RMSAuthorizationException("001",Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+	  } else if (statusCode == HttpStatus.SC_INTERNAL_SERVER_ERROR){
+        showErrorMessageBox(response);
+      } else {
+	    throw new Exception("Failed : HTTP error code :" + statusCode + "Error while publishing");
+	  }
+	}
+}
+  //BMC code ends
+
+  //BMC code starts
+  /**
+   *
+   */
+  private void importFromStorage() {
+    ArrayList<String> fileList = new ArrayList<>();
+    boolean keepProgressing = getXmiNamesFromRMS(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo(), fileList, Messages.getString("MetaEditor.USER_ERROR_IMPORTING_XMI"));
+    if (keepProgressing) {
+    	ListSelectionDialog comboDialog = new ListSelectionDialog(shell,
+                Messages.getString("MetaEditor.USER_TITLE_SELECT_VIEW_NAME"), Messages.getString("MetaEditor.USER_TITLE_SELECT_VIEW"), //$NON-NLS-2$
+        fileList.toArray());
+    	comboDialog.open();
+    	String fileName = (String) comboDialog.getSelection();
+
+    	if (Window.CANCEL == comboDialog.getReturnCode())
+    		return;
+    	if (fileName == null) {
+    		MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
+    		mb.setMessage("Import file not selected."); //$NON-NLS-1$
+    		mb.setText(Messages.getString("General.USER_TITLE_ERROR")); //$NON-NLS-1$
+    		mb.open();
+    		return;
+    	}
+    	try {
+    		// Ask for a new domain to import into...
+    		EnterStringDialog stringDialog = new EnterStringDialog(shell, "",
+    				Messages.getString("MetaEditor.USER_TITLE_SAVE_DOMAIN"), //$NON-NLS-1$
+    				Messages.getString("MetaEditor.USER_ENTER_DOMAIN_NAME")); //$NON-NLS-2$
+    		final String domainName = stringDialog.open();
+    		if (domainName != null) {
+    			int id = SWT.YES;
+    			if (CWM.exists(domainName)) {
+    				MessageBox mb = new MessageBox(shell, SWT.NO | SWT.YES | SWT.ICON_WARNING);
+    				mb.setMessage(Messages.getString("MetaEditor.USER_DOMAIN_EXISTS_OVERWRITE")); //$NON-NLS-1$
+    				mb.setText(Messages.getString("MetaEditor.USER_TITLE_DOMAIN_EXISTS")); //$NON-NLS-1$
+    				id = mb.open();
+    			}
+    			if (id == SWT.YES) {
+    				CWM delCwm = CWM.getInstance(domainName);
+    				delCwm.removeDomain();
+    			} else {
+    				return; // no selected.
+    			}
+
+    			final ArrayList<Exception> exceptionList = new ArrayList<Exception>();
+    			BusyIndicator.showWhile(Display.getCurrent(), importXmiFileFromStorage(fileName, domainName, exceptionList));
+    			if (exceptionList.size() == 0) {
+    				// Here, we are getting a whole new model, so
+    				// rebuild the whole tree
+    				refreshAll();
+    				refreshTree();
+    			} else {
+    				new ErrorDialog(shell, Messages.getString("MetaEditor.USER_TITLE_ERROR_SAVE_DOMAIN"), // $NON-NLS-1$
+    						Messages.getString("MetaEditor.USER_ERROR_LOADING_DOMAIN"), //$NON-NLS-2$
+    						(Exception) exceptionList.get(0));
+    			}
+    		}
+    	} catch (Exception e) {
+    		new ErrorDialog(shell, Messages.getString("MetaEditor.USER_TITLE_ERROR_SAVE_DOMAIN"), //$NON-NLS-1$
+    				Messages.getString("MetaEditor.USER_ERROR_LOADING_DOMAIN"), e); //$NON-NLS-2$
+    	}
+    }
+  }
+
+  private enum XMI_TYPES {
+    OOTB(), CUSTOM(), DELETED(), ALL();
+  }
+
+  private boolean getXmiNamesFromRMS(TenantInfo tenantInfo, ArrayList<String> fileList, String errorMessage) {
+    return getXmiNamesFromRMS(tenantInfo, fileList, errorMessage, XMI_TYPES.ALL);
+  }
+
+  private boolean getXmiNamesFromRMS(TenantInfo tenantInfo, ArrayList<String> fileList, String errorMessage, XMI_TYPES xmiType) {
+    HttpClient httpClient = HttpClients.createDefault();
+    String url = tenantInfo.getTenantUrl() + STORAGE_API + "?tenantId=" + tenantInfo.getTenantId();
+    HttpGet httpGet = new HttpGet(url);
+
+    HttpResponse httpResponse = null;
+    Boolean status = true;
+    try {
+      if (!AuthenticationMonitor.envToIMSJwtTokenMap.containsKey( tenantInfo.getTenantId() ) || StringUtils.isBlank(AuthenticationMonitor.envToIMSJwtTokenMap.get( tenantInfo.getTenantId() ))) {
+        throw new RMSAuthorizationException("001", Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+      }
+
+      httpGet.addHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get( tenantInfo.getTenantId() ));
+      log.logBasic("Calling REST endpoint " + url);
+      httpResponse = httpClient.execute(httpGet);
+      int statusCode = httpResponse.getStatusLine().getStatusCode();
+      log.logBasic("Received response code = " + statusCode);
+      if (statusCode == 200) {
+        HttpEntity responseEntity = httpResponse.getEntity();
+        String response = EntityUtils.toString(responseEntity);
+        log.logBasic("Received response = " + response);
+        extractXmiNamesFromResponse(fileList, xmiType, response);
+      } else if (statusCode == 401) {
+    	  throw new RMSAuthorizationException("001",Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+      } else if (statusCode == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
+          showErrorMessageBox(httpResponse);
+      } else {
+        throw new Exception("Failed : HTTP error code :" + statusCode + "Error while publishing");
+      }
+    } catch (RMSAuthorizationException e) {
+      status = handleSessionTimeout(tenantInfo);
+      log.logBasic("Session timeout status = " + (status == null ? "null" : status));
+      if (Boolean.TRUE.equals(status)) {
+        try {
+          log.logBasic("calling REST endpoint " + url);
+          httpGet.setHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get( tenantInfo.getTenantId() ));
+          httpResponse = httpClient.execute(httpGet);
+          log.logBasic("Received response code = " + httpResponse);
+          if (httpResponse.getStatusLine().getStatusCode() == 200) {
+            HttpEntity responseEntity = httpResponse.getEntity();
+            String response = EntityUtils.toString(responseEntity);
+            extractXmiNamesFromResponse(fileList, xmiType, response);
+          } else if (httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
+            status = false;
+            showErrorMessageBox(httpResponse);
+          } else {
+            status = false;
+            new ErrorDialog(shell, Messages.getString("General.USER_TITLE_ERROR"), //$NON-NLS-1$
+                    errorMessage, e); // $NON-NLS-2$
+            log.logError("Rest call failed with following exception", e);
+          }
+        } catch(Exception ee) {
+          status = false;
+          new ErrorDialog(shell, Messages.getString("General.USER_TITLE_ERROR"), //$NON-NLS-1$
+                  errorMessage, ee); // $NON-NLS-2$
+          log.logError("Rest call failed with following exception", e);
+        }
+      }
+    } catch (Exception e) {
+      status = false;
+      new ErrorDialog(shell, Messages.getString("General.USER_TITLE_ERROR"), //$NON-NLS-1$
+              errorMessage, e); // $NON-NLS-2$
+      log.logError("Rest call failed with following exception", e);
+    }
+    return status == null ? false : status;
+  }
+
+  private void showErrorMessageBox(HttpResponse httpResponse) throws IOException {
+    HttpEntity responseEntity = httpResponse.getEntity();
+    String response = EntityUtils.toString(responseEntity);
+    Gson gson = new Gson();
+    ErrorCodeResponse errorCodeResponse = gson.fromJson(response, ErrorCodeResponse.class);
+    MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
+    mb.setMessage(Messages.getString("ERROR.ST.SYSTEM_ERROR", errorCodeResponse.getErrorCode())); //$NON-NLS-1$
+    mb.setText(Messages.getString("General.USER_TITLE_ERROR")); //$NON-NLS-1$
+    mb.open();
+  }
+
+  private void extractXmiNamesFromResponse(ArrayList<String> fileList, XMI_TYPES xmiType, String response) {
+    Gson gson = new Gson();
+    listFilesResponse = gson.fromJson(response, ListFilesResponse.class);
+    switch (xmiType) {
+      case OOTB:
+        if (null != listFilesResponse.getOotb() && listFilesResponse.getOotb().size() > 0)
+          fileList.addAll(listFilesResponse.getOotb().stream().map(file -> OOTB_XMI_LABEL.concat(file)).map(file -> file.substring(0, file.lastIndexOf('.'))).collect(Collectors.toList()));
+        break;
+      case CUSTOM:
+        if (null != listFilesResponse.getOthers() && listFilesResponse.getOthers().size() > 0)
+          fileList.addAll(listFilesResponse.getOthers().stream().map(file -> file.substring(0, file.lastIndexOf('.'))).collect(Collectors.toList()));
+        break;
+      case DELETED:
+        if (null != listFilesResponse.getDeleted() && listFilesResponse.getDeleted().size() > 0)
+          fileList.addAll(listFilesResponse.getDeleted().stream().map(file -> file.substring(0, file.lastIndexOf('.'))).collect(Collectors.toList()));
+        break;
+      default:
+        if (null != listFilesResponse.getOotb() && listFilesResponse.getOotb().size() > 0) {
+          List<String> allXMIs = listFilesResponse.getOotb().stream().map(file -> OOTB_XMI_LABEL.concat(file)).map(file -> file.substring(0, file.lastIndexOf('.'))).collect(Collectors.toList());
+          fileList.addAll(allXMIs);
+        }
+        if (null != listFilesResponse.getOthers() && listFilesResponse.getOthers().size() > 0)
+          fileList.addAll(listFilesResponse.getOthers().stream().map(file -> file.substring(0, file.lastIndexOf('.'))).collect(Collectors.toList()));
+    }
+  }
+
+  private Boolean handleSessionTimeout(TenantInfo tenantInfo) {
+    Boolean keepProgressing = null;
+		MessageBox mb = new MessageBox( shell, SWT.YES | SWT.NO | SWT.ICON_QUESTION );
+		  mb.setMessage( Messages.getString( "MetaEditor.USER_IMS_SESSION_EXPIRED" ) );
+		  mb.setText( Messages.getString( "MetaEditor.USER_XMI_OP_FAILED" ) );
+		  int id = mb.open();
+
+		  if ( id == SWT.YES ) {
+			  RowMetaAndData allArgs = new RowMetaAndData();
+
+			allArgs.addValue("Enter access key:", SWT.NONE, "Key");
+			allArgs.addValue("Enter secret key:", SWT.NONE, "Secret");
+			EnterReadOnlyKeysWritableValuesDialog pwdDialog = new EnterReadOnlyKeysWritableValuesDialog(shell, SWT.NONE, allArgs);
+			  pwdDialog.setText( Messages.getString( "MetaEditor.USER_KEY_SECRET_PROMPT" ) );
+			  pwdDialog.setTitle( Messages.getString( "MetaEditor.USER_BMC_AUTH" ) + " for tenant identified by alias '" + tenantInfo.getTenantId() + "'");
+			  RowMetaAndData returnedValue = pwdDialog.open();
+			  if (returnedValue != null) {
+				  try {
+				  ValueMetaInterface valueMeta_1 = returnedValue.getRowMeta().getValueMeta( 0 );
+				  Object valueData_1 = returnedValue.getData()[0];
+				  String value_1 = valueMeta_1.getString( valueData_1 );
+
+				  ValueMetaInterface valueMeta_2 = returnedValue.getRowMeta().getValueMeta( 1 );
+				  Object valueData_2 = returnedValue.getData()[1];
+				  String value_2 = valueMeta_2.getString( valueData_2 );
+
+				  UserSessionObject authObj = new UserSessionObject();
+				  authObj.setAttribute( "key", value_1 );
+				  authObj.setAttribute( "secret", value_2 );
+			      BMCAuthenticatorForPentaho bmcAuthenticator = BMCAuthenticatorForPentaho.getInstance();
+			      bmcAuthenticator.monitorAuthentication(  tenantInfo, authObj, false );
+				  keepProgressing = true;
+                  } catch (Exception kve) {
+                    new ErrorDialog(shell, Messages.getString("MetaEditor.USER_RE_AUTH_STATUS"), //$NON-NLS-1$
+                            Messages.getString("MetaEditor.USER_FAILED_AUTH"), kve); //$NON-NLS-2$
+                    keepProgressing = false;
+                    log.logError("Exception in handledSessionTimeout ", kve);
+                  }
+              }
+	  }
+	  return keepProgressing;
+	}
+
+  /**
+   *
+   * @param fileName
+   * @param domainName
+   * @param exceptionList
+   * @return
+   */
+  private Runnable importXmiFileFromStorage(String fileName, String domainName, ArrayList<Exception> exceptionList) {
+    return () -> {
+      try {
+        boolean ootb = false;
+        final String downloadFileName;
+        if (fileName.startsWith(OOTB_XMI_LABEL)) {
+          ootb = true;
+          downloadFileName = fileName.replace(OOTB_XMI_LABEL, "");
+        } else {
+          downloadFileName = fileName;
+        }
+        HttpClient httpClient = HttpClients.createDefault();
+        String encodedURL = BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantUrl() + STORAGE_DOWNLOAD_API + "?fileName=" + URLEncoder.encode(downloadFileName) + "&ootbXmi=" + ootb + "&tenantId=" + BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId();
+        HttpGet downloadFileRequest = new HttpGet(encodedURL);
+        if (!AuthenticationMonitor.envToIMSJwtTokenMap.containsKey( BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId() ) && StringUtils.isBlank(AuthenticationMonitor.envToIMSJwtTokenMap.get( BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId()) ))
+          throw new RMSAuthorizationException("001", Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+
+        downloadFileRequest.addHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get( BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId()));
+        log.logBasic("Calling REST endpoint " + encodedURL);
+        HttpResponse response = httpClient.execute(downloadFileRequest);
+        int statusCode = response.getStatusLine().getStatusCode();
+        log.logBasic("REST call response " + statusCode);
+        if (statusCode == 200) {
+          byte[] buffer = new byte[1024];
+          File file = File.createTempFile(downloadFileName, ".xmi");
+          try (InputStream input = response.getEntity().getContent();
+               OutputStream output = new FileOutputStream(file.getAbsolutePath());) {
+            for (int length; (length = input.read(buffer)) > 0; ) {
+              output.write(buffer, 0, length);
+            }
+
+            CWM cwmInstance = CWM.getInstance(domainName);
+            String xmiString = cleanUpCredAndSetConnString(FileUtils.readFileToString(file, "UTF-8"), exceptionList);
+            if(StringUtils.isNotEmpty(xmiString)){
+              InputStream inputStream = new ByteArrayInputStream(xmiString.getBytes());
+              // import it all...
+              cwmInstance.importFromXMI(inputStream);
+              // convert to a schema
+              schemaMeta = cwmSchemaFactory.getSchemaMeta(cwmInstance);
+              inputStream.close();
+            }
+            file.delete();
+          }
+        } else if (statusCode == 401) {
+        	throw new RMSAuthorizationException("001",Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL"));
+        } else if (statusCode == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
+          showErrorMessageBox(response);
+        } else {
+          throw new Exception("Failed : HTTP error code :" + statusCode + "Error while publishing");
+        }
+      } catch (RMSAuthorizationException e) {
+    	handleSessionTimeout(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo());
+      } catch (Exception e) {
+        exceptionList.add(e);
+      }
+    };
+  }
+
+  /**
+  *
+  * @param xmiString
+  * @param exceptionList
+  * @return
+  */
+  private String cleanUpCredAndSetConnString(String xmiString, List<Exception> exceptionList) {
+	    XPathFactory xf = XPathFactory.newInstance();
+	    XPath xp = xf.newXPath();
+	    DocumentBuilder db = null;
+	    try {
+          DocumentBuilderFactory factory = getDocumentBuilderFactory();
+          db = factory.newDocumentBuilder();
+	      Document doc = db.parse(new InputSource(new ByteArrayInputStream(xmiString.getBytes())));
+	      XPathExpression expression = xp.compile(
+	              "//XMI/XMI.content/*[name()='CWMRDB:Catalog']/*[name()='CWM:ModelElement.taggedValue']/*[name()='CWM:TaggedValue']");
+	      NodeList nodelist = (NodeList) expression.evaluate(doc, XPathConstants.NODESET);
+	      for (int t = 0; t < nodelist.getLength(); t++) {
+	        Node currentItem = nodelist.item(t);
+	        setConnUrlAndEraseUnamePwd(currentItem);
+	      }
+          TransformerFactory transformerFactory = getTransformerFactory();
+          Transformer transformer = transformerFactory.newTransformer();
+	      DOMSource source = new DOMSource(doc);
+	      StringWriter stringWriter = new StringWriter();
+	      File file1 = File.createTempFile("temp", ".xmi");
+	      file1.deleteOnExit();
+	      StreamResult result = new StreamResult(file1);
+	      result.setWriter(stringWriter);
+	      transformer.transform(source, result);
+
+	      BufferedWriter bwr = new BufferedWriter(new FileWriter(file1));
+	      bwr.write(stringWriter.getBuffer().toString());
+	      bwr.flush();
+	      bwr.close();
+	      file1.delete();
+	      return stringWriter.getBuffer().toString();
+	    } catch (Exception e) {
+	      exceptionList.add(e);
+	      return "";
+	    }
+
+  }
+  /**
+   *
+   * @param xmiString
+   * @param exceptionList
+   * @return
+   */
+  private String cleanUpCredentials(String xmiString, List<Exception> exceptionList) {
+    XPathFactory xf = XPathFactory.newInstance();
+    XPath xp = xf.newXPath();
+    DocumentBuilder db = null;
+    try {
+      DocumentBuilderFactory factory = getDocumentBuilderFactory();
+      db = factory.newDocumentBuilder();
+      Document doc = db.parse(new InputSource(new ByteArrayInputStream(xmiString.getBytes())));
+      XPathExpression expression = xp.compile(
+              "//XMI/XMI.content/*[name()='CWMRDB:Catalog']/*[name()='CWM:ModelElement.taggedValue']/*[name()='CWM:TaggedValue']");
+      NodeList nodelist = (NodeList) expression.evaluate(doc, XPathConstants.NODESET);
+      for (int t = 0; t < nodelist.getLength(); t++) {
+        Node currentItem = nodelist.item(t);
+        setUnamePwdJdbcUrlToBlank(currentItem);
+      }
+      TransformerFactory transformerFactory = getTransformerFactory();
+      Transformer transformer = transformerFactory.newTransformer();
+      DOMSource source = new DOMSource(doc);
+      StringWriter stringWriter = new StringWriter();
+      File file1 = File.createTempFile("temp", ".xmi");
+      file1.deleteOnExit();
+      StreamResult result = new StreamResult(file1);
+      result.setWriter(stringWriter);
+      transformer.transform(source, result);
+
+      BufferedWriter bwr = new BufferedWriter(new FileWriter(file1));
+      bwr.write(stringWriter.getBuffer().toString());
+      bwr.flush();
+      bwr.close();
+      file1.delete();
+      return stringWriter.getBuffer().toString();
+    } catch (Exception e) {
+      exceptionList.add(e);
+      return "";
+    }
+  }
+  //BMC code ends
   protected void editConcepts() {
     // TODO Auto-generated method stub
 
@@ -729,38 +1386,14 @@ public class MetaEditor implements SelectionListener {
             new ErrorDialog(
               shell,
               Messages.getString( "General.USER_TITLE_ERROR" ),
-              Messages.getString( "MetaEditor.USER_ERROR_EXPORTING_XMI" ), e ); //$NON-NLS-1$ //$NON-NLS-2$
+              Messages.getString( "MetaEditor.USER_ERROR_EXPORTING_XMI" ), e );
+              log.logError("Exception shown on error dialog", e);
           }
         }
       }
     }
   }
 
-  public void publishXmi() {
-    boolean goAhead = true;
-    if ( schemaMeta.hasChanged() ) {
-      MessageBox mb = new MessageBox( shell, SWT.NO | SWT.YES | SWT.ICON_WARNING );
-      mb.setMessage( Messages.getString( "MetaEditor.USER_SAVE_DOMAIN" ) ); //$NON-NLS-1$
-      mb.setText( Messages.getString( "MetaEditor.USER_CONTINUE" ) ); //$NON-NLS-1$
-      if ( mb.open() == SWT.YES ) {
-        goAhead = saveFile();
-      } else {
-        goAhead = false;
-      }
-    }
-    if ( goAhead ) {
-      if ( !validateBusinessModels() ) {
-        MessageBox mb = new MessageBox( shell, SWT.NO | SWT.YES | SWT.ICON_WARNING );
-        mb.setMessage( Messages.getString( "MetaEditor.USER_MODEL_MALFORMED" ) ); //$NON-NLS-1$
-        mb.setText( Messages.getString( "MetaEditor.USER_MODEL_VALIDATION_ERROR" ) ); //$NON-NLS-1$
-        goAhead = mb.open() == SWT.YES;
-      }
-    }
-    if ( goAhead ) {
-      PublishDialog publishDialog = new PublishDialog( shell, schemaMeta );
-      publishDialog.open();
-    }
-  }
 
   public boolean validateBusinessModels() {
     boolean valid = true;
@@ -847,7 +1480,8 @@ public class MetaEditor implements SelectionListener {
           new ErrorDialog(
             shell,
             Messages.getString( "MetaEditor.USER_TITLE_ERROR_SAVE_DOMAIN" ),
-            Messages.getString( "MetaEditor.USER_ERROR_LOADING_DOMAIN" ), e ); //$NON-NLS-1$ //$NON-NLS-2$
+            Messages.getString( "MetaEditor.USER_ERROR_LOADING_DOMAIN" ), e );
+            log.logError("Rest call failed with following exception", e);
         }
       }
     }
@@ -962,21 +1596,62 @@ public class MetaEditor implements SelectionListener {
     miFileSaveAs.addListener( SWT.Selection, lsFileSaveAs );
 
     new MenuItem( msFile, SWT.SEPARATOR );
+    //BMC code starts
+   /*
     miFileImport = new MenuItem( msFile, SWT.CASCADE );
     miFileImport.setText( Messages.getString( "MetaEditor.USER_IMPORT" ) ); //$NON-NLS-1$
-    miFileImport.setAccelerator( SWT.MOD1 | 'i' );
+//    miFileImport.setAccelerator( SWT.MOD1 | 'i' );
     miFileImport.addListener( SWT.Selection, lsFileImport );
 
     miFileExport = new MenuItem( msFile, SWT.CASCADE );
     miFileExport.setText( Messages.getString( "MetaEditor.USER_EXPORT" ) ); //$NON-NLS-1$
-    miFileExport.setAccelerator( SWT.MOD1 | 'e' );
-    miFileExport.addListener( SWT.Selection, lsFileExport );
+//    miFileExport.setAccelerator( SWT.MOD1 | 'e' );
+    miFileExport.addListener( SWT.Selection, lsFileExport ); */
 
-    miPublish = new MenuItem( msFile, SWT.CASCADE );
-    miPublish.setText( Messages.getString( "MetaEditor.PUBLISH" ) ); //$NON-NLS-1$
-    miPublish.addListener( SWT.Selection, lsPublish );
+    miImportFromStorage = new MenuItem( msFile, SWT.CASCADE );
+    miImportFromStorage.setAccelerator( SWT.MOD1 | 'i' );
+    miImportFromStorage.setText( Messages.getString( "MetaEditor.USER_IMPORT_FROM_STORAGE" )); //$NON-NLS-1$
+    miImportFromStorage.addListener(SWT.Selection, lsImportFromStorage);
+
+    miExportToStorage = new MenuItem( msFile, SWT.CASCADE );
+    miExportToStorage.setText( Messages.getString( "MetaEditor.USER_EXPORT_TO_STORAGE" )); //$NON-NLS-1$
+    //miExportToStorage.setAccelerator( SWT.MOD1 | 'e' );
+    //miExportToStorage.addListener(SWT.Selection, lsExportToStorage);
+	exportMenu = new Menu( shell, SWT.DROP_DOWN );
+
+    miExportToStorage.setMenu( exportMenu );
+	BMCAuthenticatorForPentaho.getInstance().getAllTenantInfo().getTenantInfoList().forEach(each -> {
+    	MenuItem exportItem = new MenuItem( exportMenu, SWT.CASCADE );
+    	String envAlias = each.getEnvAlias() + (!each.isDefaultTenant() ? "" : "[" + TenantInfoList.DEFAULT_CONTEXT + "]");
+    	exportItem.setText( envAlias );
+    	exportItem.addListener(SWT.Selection, new Listener() {
+            public void handleEvent( Event e ) {
+                if ( ( null != each.getTenantId() ) ) {
+                	exportToTenantStorage( BMCAuthenticatorForPentaho.getInstance().getTenantInfoBasedOnTenantId( each.getTenantId() ) );
+                }
+            }
+    	});
+	});
+	new MenuItem( exportMenu, SWT.SEPARATOR );
+
+	MenuItem configItem = new MenuItem( exportMenu, SWT.CASCADE );
+	configItem.setText( Messages.getString("MetaEditor.CONFIGURE_ENV") );
+	configItem.addListener(SWT.Selection, new Listener() {
+        public void handleEvent( Event e ) {
+        	configureEnvForViewPublishing();
+        }
+	});
+
+//    miPublish = new MenuItem( msFile, SWT.CASCADE );
+//    miPublish.setText( Messages.getString( "MetaEditor.PUBLISH" ) ); //$NON-NLS-1$
+//    miPublish.addListener( SWT.Selection, lsPublish );
 
     new MenuItem( msFile, SWT.SEPARATOR );
+    miXMIDelete = new MenuItem( msFile, SWT.CASCADE );
+    miXMIDelete.setText( Messages.getString( "MetaEditor.USER_DELETE_XMI" ) ); //$NON-NLS-1$
+    miXMIDelete.addListener( SWT.Selection, lsXMIDelete );
+    //BMC code ends
+
     miFileDelete = new MenuItem( msFile, SWT.CASCADE );
     miFileDelete.setText( Messages.getString( "MetaEditor.USER_DELETE_DOMAIN" ) ); //$NON-NLS-1$
     miFileDelete.addListener( SWT.Selection, lsFileDelete );
@@ -1032,20 +1707,18 @@ public class MetaEditor implements SelectionListener {
     mTools.setText( Messages.getString( "MetaEditor.USER_TOOLS" ) ); //$NON-NLS-1$
     msTools = new Menu( shell, SWT.DROP_DOWN );
     mTools.setMenu( msTools );
-
-    miSecurityService = new MenuItem( msTools, SWT.CASCADE );
+    //BMC code starts
+   /* miSecurityService = new MenuItem( msTools, SWT.CASCADE );
     miSecurityService.setText( Messages.getString( "MetaEditor.USER_CONFIGURE_SECURITY_SERVICE" ) ); //$NON-NLS-1$
     miSecurityService.addListener( SWT.Selection, lsSecurityService );
-
     new MenuItem( msTools, SWT.SEPARATOR );
     miLocalesEditor = new MenuItem( msTools, SWT.CASCADE );
     miLocalesEditor.setText( Messages.getString( "MetaEditor.USER_CONFIGURE_LOCALES" ) ); //$NON-NLS-1$
     miLocalesEditor.addListener( SWT.Selection, lsEditLocales );
-
     miConceptEditor = new MenuItem( msTools, SWT.CASCADE );
     miConceptEditor.setText( Messages.getString( "MetaEditor.USER_CONFIGURE_CONCEPTS" ) ); //$NON-NLS-1$
-    miConceptEditor.addListener( SWT.Selection, lsEditConcepts );
-
+    miConceptEditor.addListener( SWT.Selection, lsEditConcepts );*/
+  //BMC code ends
     miCategoryEditor = new MenuItem( msTools, SWT.CASCADE );
     miCategoryEditor.setText( Messages.getString( "MetaEditor.USER_CONFIGURE_CATEGORYS" ) ); //$NON-NLS-1$
     miCategoryEditor.addListener( SWT.Selection, lsEditCategories );
@@ -1098,7 +1771,7 @@ public class MetaEditor implements SelectionListener {
 
     miLogging.addSelectionListener( new SelectionAdapter() {
       public void widgetSelected( SelectionEvent e ) {
-        tabfolder.setSelection( 2 );
+        tabfolder.setSelection( 1 );
       }
     } );
 
@@ -1111,6 +1784,35 @@ public class MetaEditor implements SelectionListener {
     miHelpAbout = new MenuItem( msHelp, SWT.CASCADE );
     miHelpAbout.setText( Messages.getString( "MetaEditor.USER_ABOUT" ) ); //$NON-NLS-1$
     miHelpAbout.addListener( SWT.Selection, lsHelpAbout );
+  }
+
+  private void populateExportMenu() {
+	  MenuItem[] items = exportMenu.getItems();
+	  for (int t=0;t<items.length;t++) {
+		  items[t].dispose();
+	  }
+	  //Add fresh again
+		BMCAuthenticatorForPentaho.getInstance().getAllTenantInfo().getTenantInfoList().forEach(each -> {
+	    	MenuItem exportItem = new MenuItem( exportMenu, SWT.CASCADE );
+	    	String envAlias = each.getEnvAlias() + (!each.isDefaultTenant() ? "" : "[" + TenantInfoList.DEFAULT_CONTEXT + "]");
+	    	exportItem.setText( envAlias );
+	    	exportItem.addListener(SWT.Selection, new Listener() {
+	            public void handleEvent( Event e ) {
+	                if ( ( null != each.getTenantId() ) ) {
+	                	exportToTenantStorage( BMCAuthenticatorForPentaho.getInstance().getTenantInfoBasedOnTenantId( each.getTenantId() ) );
+	                }
+	            }
+	    	});
+		});
+
+		new MenuItem( exportMenu, SWT.SEPARATOR );
+		MenuItem configItem = new MenuItem( exportMenu, SWT.CASCADE );
+		configItem.setText( Messages.getString("MetaEditor.CONFIGURE_ENV") );
+		configItem.addListener(SWT.Selection, new Listener() {
+	        public void handleEvent( Event e ) {
+	        	configureEnvForViewPublishing();
+	        }
+		});
   }
 
   /**
@@ -1129,7 +1831,7 @@ public class MetaEditor implements SelectionListener {
           }
           // Enable/disable menus that rely on having an active model
           miNewBTable.setEnabled( hasActiveModel );
-
+          populateExportMenu();
           // Enable/disable menus that rely on having more than 1
           // graph item selected
           // mPopAD.setEnabled(nrSelected > 1);
@@ -1137,6 +1839,10 @@ public class MetaEditor implements SelectionListener {
       };
     }
     return mainListener;
+  }
+
+  public String getAlias(String tenantUrl, boolean isDefaultTenant) {
+	  return tenantUrl.substring(tenantUrl.indexOf("//") + 2, tenantUrl.length()) + (!isDefaultTenant ? "" : "[" + TenantInfoList.DEFAULT_CONTEXT + "]");
   }
 
   private void addMenuLast() {
@@ -1306,8 +2012,8 @@ public class MetaEditor implements SelectionListener {
         testQR();
       }
     } );
-
-    final ToolItem tiConceptEdit = new ToolItem( tBar, SWT.PUSH );
+    //BMC code starts
+    /*final ToolItem tiConceptEdit = new ToolItem( tBar, SWT.PUSH );
     tiConceptEdit.setImage( imConceptEdit );
     tiConceptEdit.setToolTipText( Messages.getString( "MetaEditor.USER_CONCEPT_EDITOR" ) ); //$NON-NLS-1$
     tiConceptEdit.addListener( SWT.Selection, lsEditConcepts );
@@ -1315,8 +2021,8 @@ public class MetaEditor implements SelectionListener {
     final ToolItem tiLocaleEdit = new ToolItem( tBar, SWT.PUSH );
     tiLocaleEdit.setImage( imLocaleEdit );
     tiLocaleEdit.setToolTipText( Messages.getString( "MetaEditor.USER_LOCALE_EDITOR" ) ); //$NON-NLS-1$
-    tiLocaleEdit.addListener( SWT.Selection, lsEditLocales );
-
+    tiLocaleEdit.addListener( SWT.Selection, lsEditLocales );*/
+    //BMC code ends
     final ToolItem tiCategoryEdit = new ToolItem( tBar, SWT.PUSH );
     tiCategoryEdit.setImage( imCategoryEdit );
     tiCategoryEdit.setToolTipText( Messages.getString( "MetaEditor.USER_CATEGORY_EDITOR" ) ); //$NON-NLS-1$
@@ -1388,7 +2094,7 @@ public class MetaEditor implements SelectionListener {
     mainObject.setWidth( 200 );
 
     TreeColumn mainConcept = new TreeColumn( treeViewer.getTree(), SWT.LEFT );
-    mainConcept.setText( Messages.getString( "MetaEditor.USER_PARENT_CONCEPT" ) ); //$NON-NLS-1$
+    mainConcept.setText( "" ); //$NON-NLS-1$
     mainConcept.setWidth( 200 );
 
     treeViewer.getTree().setBackground( GUIResource.getInstance().getColorBackground() );
@@ -1741,13 +2447,15 @@ public class MetaEditor implements SelectionListener {
     } else if ( node instanceof DatabaseMetaTreeNode ) { // We clicked on a database node
 
       final DatabaseMeta databaseMeta = ( (DatabaseMetaTreeNode) node ).getDatabaseMeta();
-      MenuItem miNew = new MenuItem( mainMenu, SWT.PUSH );
+      //BMC code starts
+      /* MenuItem miNew = new MenuItem( mainMenu, SWT.PUSH );
       miNew.setText( Messages.getString( "MetaEditor.USER_NEW_TEXT" ) ); //$NON-NLS-1$
       miNew.addListener( SWT.Selection, new Listener() {
         public void handleEvent( Event evt ) {
           newConnection();
         }
-      } );
+      } );*/
+      //BMC code ends
       MenuItem miEdit = new MenuItem( mainMenu, SWT.PUSH );
       miEdit.setText( Messages.getString( "MetaEditor.USER_EDIT_TEXT" ) ); //$NON-NLS-1$
       miEdit.addListener( SWT.Selection, new Listener() {
@@ -1756,13 +2464,15 @@ public class MetaEditor implements SelectionListener {
           treeViewer.update( node, null );
         }
       } );
-      MenuItem miDupe = new MenuItem( mainMenu, SWT.PUSH );
+      //BMC code starts
+     /* MenuItem miDupe = new MenuItem( mainMenu, SWT.PUSH );
       miDupe.setText( Messages.getString( "MetaEditor.USER_DUPLICATE_TEXT" ) ); //$NON-NLS-1$
       miDupe.addListener( SWT.Selection, new Listener() {
         public void handleEvent( Event evt ) {
           dupeConnection( databaseMeta );
         }
-      } );
+      } );*/
+      //BMC code ends
       MenuItem miDel = new MenuItem( mainMenu, SWT.PUSH );
       miDel.setText( Messages.getString( "MetaEditor.USER_DELETE_TEXT" ) ); //$NON-NLS-1$
       miDel.addListener( SWT.Selection, new Listener() {
@@ -2390,11 +3100,11 @@ public class MetaEditor implements SelectionListener {
     // //$NON-NLS-1$
     // tiTabsConcept.setToolTipText(Messages.getString("MetaEditor.USER_CONCEPTS_TEXT"));
     // //$NON-NLS-1$
-
-    CTabItem tiTabsLocale = new CTabItem( tabfolder, SWT.NULL );
+    //BMC code starts
+   /* CTabItem tiTabsLocale = new CTabItem( tabfolder, SWT.NULL );
     tiTabsLocale.setText( Messages.getString( "MetaEditor.USER_LOCALES" ) ); //$NON-NLS-1$
-    tiTabsLocale.setToolTipText( Messages.getString( "MetaEditor.USER_LOCALES_TEXT" ) ); //$NON-NLS-1$
-
+    tiTabsLocale.setToolTipText( Messages.getString( "MetaEditor.USER_LOCALES_TEXT" ) );*/ //$NON-NLS-1$
+    //BMC code ends
     CTabItem tiTabsLog = new CTabItem( tabfolder, SWT.NULL );
     tiTabsLog.setText( Messages.getString( "MetaEditor.USER_LOG_VIEW" ) ); //$NON-NLS-1$
     tiTabsLog.setToolTipText( Messages.getString( "MetaEditor.USER_LOG_VIEW_TEXT" ) ); //$NON-NLS-1$
@@ -2408,9 +3118,10 @@ public class MetaEditor implements SelectionListener {
 
     tiTabsGraph.setControl( metaEditorGraph );
     // tiTabsConcept.setControl(metaEditorConcept);
-    tiTabsLocale.setControl( metaEditorLocales );
+    //BMC code starts
+    //tiTabsLocale.setControl( metaEditorLocales );
     tiTabsLog.setControl( metaEditorLog );
-
+    //BMC code ends
     // toggleOlapTab();
 
     tabfolder.setSelection( 0 );
@@ -2464,10 +3175,10 @@ public class MetaEditor implements SelectionListener {
   /*
    * public void newSelected() { BusinessModel activeModel = schemaMeta.getActiveModel(); if (activeModel == null)
    * return;
-   * 
+   *
    * log.logDebug(APPLICATION_NAME, Messages.getString("MetaEditor.DEBUG_NEW_SELECTED")); //$NON-NLS-1$ // Determine
    * what menu we selected from...
-   * 
+   *
    * TreeItem ti[] = treeViewer.getTree().getSelection(); // Then call newConnection or newTrans if (ti.length >= 1) {
    * String name = ti[0].getText(); TreeItem parent = ti[0].getParentItem(); if (parent == null) {
    * log.logDebug(APPLICATION_NAME, Messages.getString("MetaEditor.DEBUG_ELEMENT_HAS_NO_PARENT")); //$NON-NLS-1$ if
@@ -2538,6 +3249,16 @@ public class MetaEditor implements SelectionListener {
   }
 
   public BusinessModel newBusinessModel() {
+    //bmc code starts
+    int businessModelCount = mainTreeNode.getBusinessModelsRoot().getChildren().size();
+    if (businessModelCount > 0) {
+      MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_WARNING | SWT.CENTER);
+      mb.setMessage(Messages.getString("MetaEditor.USER_BUSINESS_MODELS_MULTIPLE"));
+      mb.setText(Messages.getString("MetaEditor.USER_HELP_METADATA_EDITOR"));
+      mb.open();
+      return null;
+    }
+    //bmc code ends
     String id = null;
     // returns valid id, and semi-random number used for id generation
     // ...mimics old behavior as closely as possible.
@@ -2647,6 +3368,9 @@ public class MetaEditor implements SelectionListener {
 
   public void editConnection( DatabaseMeta db ) {
     if ( db != null ) {
+    	//BMC code starts
+    	db.setDefault(BMC_AR_JDBC_DRIVER, generateBmcARUrlMap(), true);
+    	//BMC code ends
       DatabaseDialog con = new DatabaseDialog( shell, db );
       con.open();
     }
@@ -2656,6 +3380,7 @@ public class MetaEditor implements SelectionListener {
   public void dupeConnection( DatabaseMeta databaseMeta ) {
     if ( databaseMeta != null ) {
       try {
+    	  
         int pos = schemaMeta.indexOfDatabase( databaseMeta );
         DatabaseMeta newdb = (DatabaseMeta) databaseMeta.clone();
         String dupename = Messages.getString( "MetaEditor.USER_COPY_OF", databaseMeta.getName() ); //$NON-NLS-1$
@@ -2846,9 +3571,24 @@ public class MetaEditor implements SelectionListener {
       refreshGraph();
     }
   }
-
+//BMC code starts
+  private Map<String, String> generateBmcARUrlMap() {
+	Map<String, String> customUrlMap = new LinkedHashMap<>();
+	customUrlMap.put( GenericDatabaseMeta.ATRRIBUTE_CUSTOM_URL, BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getConnectionUrl() );
+	AtomicInteger counter = new AtomicInteger( 0 );
+	BMCAuthenticatorForPentaho.getInstance().getAllTenantInfo().getTenantInfoList().stream().filter(each -> !each.isDefaultTenant()).forEach(each -> {
+		if ( !BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getConnectionUrl().equalsIgnoreCase(each.getConnectionUrl()) ) {
+			counter.incrementAndGet();
+			customUrlMap.put( GenericDatabaseMeta.ATRRIBUTE_CUSTOM_URL + counter, each.getConnectionUrl() );
+		}
+	});
+	return customUrlMap;
+  }
+//BMC code ends
   public void newConnection() {
-    DatabaseMeta db = new DatabaseMeta();
+	//BMC code starts
+    DatabaseMeta db = new DatabaseMeta(BMC_AR_JDBC_DRIVER, generateBmcARUrlMap());
+    //BMC code ends
     DatabaseDialog con = new DatabaseDialog( shell, db );
     String con_name = con.open();
     if ( con_name != null ) {
@@ -2861,7 +3601,8 @@ public class MetaEditor implements SelectionListener {
         new ErrorDialog(
           shell,
           Messages.getString( "General.USER_TITLE_ERROR" ),
-          Messages.getString( "MetaEditor.USER_ERROR_DATABASE_NAME_EXISTS" ), e ); //$NON-NLS-1$ //$NON-NLS-2$
+          Messages.getString( "MetaEditor.USER_ERROR_DATABASE_NAME_EXISTS" ), e );
+          log.logError("Rest call failed with following exception", e);
       }
     }
   }
@@ -2894,7 +3635,14 @@ public class MetaEditor implements SelectionListener {
             Messages.getString( "MetaEditor.USER_SELECT_DOMAIN" ) ); //$NON-NLS-1$
         String domainName = selectionDialog.open();
         if ( domainName != null ) {
-          readData( domainName );
+        	//BMC code starts
+        	Runnable runnable = new Runnable() {
+        		public void run() {
+        			readData( domainName );
+        		}
+        	};
+        	BusyIndicator.showWhile( Display.getCurrent(), runnable );
+        	//BMC code ends
         }
       } catch ( CWMException e ) {
         new ErrorDialog(
@@ -3078,9 +3826,10 @@ public class MetaEditor implements SelectionListener {
 
     VersionHelper verHelper = new VersionHelper();
     StringBuffer message = new StringBuffer();
-
-    message.append( verHelper.getVersionInformation( MetaEditor.class ) ).append( Const.CR )
-      .append( Const.CR ); //$NON-NLS-1$
+    //BMC code starts
+    message.append(changeToBMCDefaultTitle(verHelper.getVersionInformation(MetaEditor.class))).append(Const.CR)
+            .append(Const.CR); //$NON-NLS-1$
+    //BMC code ends
     // .append(Messages.getString("MetaEditor.USER_HELP_METADATA_EDITOR")).append(Const.VERSION).append(Const.CR)
     // .append(Const.CR);
     // //$NON-NLS-1$
@@ -3093,8 +3842,10 @@ public class MetaEditor implements SelectionListener {
     message
       .append( Messages
         .getString( "MetaEditor.USER_HELP_PENTAHO_COPYRIGHT", "" + ( ( new Date() ).getYear() + 1900 ) ) ) //$NON-NLS-1$
-      .append( Const.CR ).append( Const.CR )
-      .append( Messages.getString( "MetaEditor.USER_HELP_PENTAHO_MESSAGE" ) ) //$NON-NLS-1$
+      .append( Const.CR )
+      .append( Messages.getString( "MetaEditor.USER_HELP_BMC_COPYRIGHT" ) ) .append( Const.CR ).append( Const.CR )
+      .append( Messages.getString( "MetaEditor.USER_HELP_PENTAHO_MESSAGE" ) ).append( Const.CR )
+      .append( Messages.getString( "MetaEditor.USER_HELP_BMC_MESSAGE" ) )//$NON-NLS-1$
       .append( Const.CR ).append( Const.CR )
       .append( Messages.getString( "MetaEditor.USER_HELP_PENTAHO_MESSAGE2" ) ); //$NON-NLS-1$
 
@@ -3102,6 +3853,20 @@ public class MetaEditor implements SelectionListener {
     mb.setText( Messages.getString( "MetaEditor.USER_HELP_METADATA_EDITOR" ) ); //$NON-NLS-1$
     mb.open();
   }
+ //BMC code starts
+  /**
+   * VersionHelper sets the title as "Pentaho Metadata Editor - No Version Information Available" in case of exception
+   * As we don't have access to VersionHelper class, This API changes pentaho title to BMC one
+   * "Pentaho Metadata Editor" is replaced as "Pentaho Metadata Editor"
+   *
+   */
+  private String changeToBMCDefaultTitle(String title) {
+    if(StringUtils.isNotEmpty(title)){
+      title = title.replace("Pentaho Metadata Editor","Reporting Metadata Studio");
+    }
+    return title;
+  }
+  //BMC code ends
 
   public void editUnselectAll() {
     if ( schemaMeta.getActiveModel() == null ) {
@@ -3490,6 +4255,106 @@ public class MetaEditor implements SelectionListener {
     }
   }
 
+//BMC code starts
+public void deleteXMI() {
+  log.logBasic("deleting XMI ...");
+  Database database = null;
+  try {
+    ArrayList<String> xmiNames = new ArrayList<>();
+    boolean keepProcessing = getXmiNamesFromRMS(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo(), xmiNames, Messages.getString("MetaEditor.USER_ERROR_DELETING_XMI"), XMI_TYPES.CUSTOM);
+    // Select from it...
+    if (keepProcessing) {
+      if (CollectionUtils.isNotEmpty(xmiNames)) {
+        EnterSelectionDialog dialog =
+                new EnterSelectionDialog(
+                        shell,
+                        xmiNames.toArray(new String[0]),
+                        Messages.getString("MetaEditor.USER_TITLE_DELETE_XMI"),
+                        Messages.getString("MetaEditor.USER_SELECT_XMI"), 500, 400); //$NON-NLS-1$ //$NON-NLS-2$
+        dialog.setMulti(false);
+        if (dialog.open() != null) {
+          int[] indexes = dialog.getSelectionIndeces();
+          /*
+            Will be used for multi selection implementation
+            List<String> selectedXMINames = Arrays.stream(ArrayUtils.toObject(indexes)).map(i -> xmiNames.get(i)).collect(Collectors.toList());
+           */
+          String toBeDeletedXMI = xmiNames.get(indexes[0]);
+          MessageBox mb = new MessageBox(shell, SWT.YES | SWT.NO | SWT.ICON_QUESTION | SWT.CENTER);
+          mb.setMessage(Messages.getString("MetaEditor.USER_DELETE_XMI_CONFIRMATION", toBeDeletedXMI));
+          mb.setText(Messages.getString("General.USER_TITLE_WARNING"));
+          int answer = mb.open();
+          if(SWT.NO == answer) {
+            return ;
+          }
+          boolean isSuccessful = deleteXMIFromHelixDashboard(toBeDeletedXMI);
+          if (isSuccessful) {
+            mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION | SWT.CENTER);
+            mb.setMessage(Messages.getString("MetaEditor.USER_DELETE_XMI_SUCCESS", toBeDeletedXMI));
+            mb.setText(Messages.getString("MetaEditor.USER_HELP_METADATA_EDITOR"));
+            mb.open();
+          }
+        }
+      } else {
+        MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION | SWT.CENTER);
+        mb.setMessage(Messages.getString("MetaEditor.USER_ERROR_XMI_NO_FILE"));
+        mb.setText(Messages.getString("General.USER_TITLE_ERROR"));
+        mb.open();
+      }
+    }
+
+  } catch (Exception e) {
+    new ErrorDialog(
+            shell,
+            Messages.getString("General.USER_TITLE_ERROR"),
+            Messages.getString("MetaEditor.USER_ERROR_DELETING_XMI"), e);
+    log.logError("Rest call failed with following exception", e);
+  } finally {
+    if (database != null) {
+      database.disconnect();
+    }
+  }
+}
+  private boolean deleteXMIFromHelixDashboard(String xmiName) throws IOException {
+    if (StringUtils.isEmpty(xmiName)) {
+      log.logBasic("No XMI to delete. XMI name is either null or empty");
+      return false;
+    }
+    log.logBasic("Going to delete following XMIs from Helix Dashboard " + xmiName);
+    if (!xmiName.toLowerCase().endsWith(".xmi") && !xmiName.toLowerCase().endsWith(".xml")) {
+      xmiName += ".xmi"; //$NON-NLS-1$
+    }
+    HttpClient httpClient = HttpClients.createDefault();
+    String url = BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantUrl() + STORAGE_API + "?fileName=" + xmiName;
+    HttpDelete httpDelete = new HttpDelete(url);
+    httpDelete.addHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId()) );
+    HttpResponse httpResponse = null;
+    Boolean status = true;
+    log.logBasic("calling delete REST endpoint " + url);
+    httpResponse = httpClient.execute(httpDelete);
+    int statusCode = httpResponse.getStatusLine().getStatusCode();
+    log.logBasic("Received response code = " + statusCode);
+    if (HttpStatus.SC_OK == statusCode) {
+      log.logBasic("XMI deleted successfully.");
+      return true;
+    } else if (HttpStatus.SC_UNAUTHORIZED == statusCode || StringUtils.isBlank( AuthenticationMonitor.envToIMSJwtTokenMap.get(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId()) )) {
+      status = handleSessionTimeout(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo());
+      if (Boolean.TRUE.equals(status)) {
+        httpDelete.setHeader("Authorization", "Bearer " + AuthenticationMonitor.envToIMSJwtTokenMap.get(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getTenantId()));
+        httpResponse = httpClient.execute(httpDelete);
+        if (httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+          return true;
+        } else {
+          new ErrorDialog(shell, Messages.getString("MetaEditor.USER_RE_AUTH_STATUS"), //$NON-NLS-1$
+                  Messages.getString("MetaEditor.USER_FAILED_AUTH"), new RMSAuthorizationException(Messages.getString("ERROR.RM-001.AUTH_FAILURE.CHECK_TENANT_URL_CREDENTIAL")));
+        }
+      }
+    } else if (statusCode == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
+      showErrorMessageBox(httpResponse);
+      return false;
+    }
+    return false;
+  }
+  //BMC code ends
   private void importTableDefinition( Database database, String schemaName, String tableName ) throws KettleException {
     UniqueList<PhysicalColumn> fields = new UniqueArrayList<PhysicalColumn>();
 
@@ -3670,84 +4535,119 @@ public class MetaEditor implements SelectionListener {
   }
 
   public static void main( String[] args ) throws Exception {
+	  UserSessionObject authObj = new UserSessionObject();
 
-    KettleEnvironment.init( false );
+	  try {
+	  //BMC code starts
+		  List<String> newargs = fetchUserInfoAndResetMainArgs(args, authObj);
+          KettleEnvironment.init( false );
 
-    System
-      .setProperty( "java.naming.factory.initial", "org.osjava.sj.SimpleContextFactory" ); //$NON-NLS-1$ //$NON-NLS-2$
-    System.setProperty( "org.osjava.sj.root", "simple-jndi" ); //$NON-NLS-1$ //$NON-NLS-2$
-    System.setProperty( "org.osjava.sj.delimiter", "/" ); //$NON-NLS-1$ //$NON-NLS-2$
-
-    LogChannel log = new LogChannel( APPLICATION_NAME );
-    Display.setAppName( APPLICATION_NAME );
-    Display display = new Display();
-
-    if ( !Props.isInitialized() ) {
-      Const.checkPentahoMetadataDirectory();
-      PropsUI.init( display, Const.getPropertiesFile() ); // things to remember...
-    }
-
-    Window.setDefaultImage( Constants.getImageRegistry( Display.getCurrent() ).get( "pentaho-icon" ) ); //$NON-NLS-1$
-
-    Splash splash = new Splash( display );
-
-    final MetaEditor win = new MetaEditor( log, display );
-
-    // Read kettle transformation specified on command-line?
-    if ( args.length == 1 && !Const.isEmpty( args[ 0 ] ) ) {
-      if ( CWM.exists( args[ 0 ] ) ) { // Only try to load the domain if it exists.
-        win.cwm = CWM.getInstance( args[ 0 ] );
-        CwmSchemaFactoryInterface cwmSchemaFactory = Settings.getCwmSchemaFactory();
-        win.schemaMeta = cwmSchemaFactory.getSchemaMeta( win.cwm );
-        win.setDomainName( args[ 0 ] );
-        win.schemaMeta.clearChanged();
-      } else {
-        win.newFile();
+	      BMCAuthenticatorForPentaho bmcAuthenticator = BMCAuthenticatorForPentaho.getInstance();
+	      bmcAuthenticator.monitorAuthentication(  bmcAuthenticator.getDefaultTenantInfo(), authObj, false );
+      //BMC code ends
+	      callOOTBPentahoMainMethod( newargs.toArray( new String[0] ) );
+	  }
+      catch(Exception e) {
+        System.exit(-1);
       }
-    } else {
-      if ( win.props.openLastFile() ) {
-        String[] lastfiles = win.props.getLastFiles();
-        if ( lastfiles.length > 0 ) {
-          try {
-            if ( CWM.exists( lastfiles[ 0 ] ) ) { // Only try to load the domain if it exists.
-              win.cwm = CWM.getInstance( lastfiles[ 0 ] );
-              CwmSchemaFactoryInterface cwmSchemaFactory = Settings.getCwmSchemaFactory();
-              win.schemaMeta = cwmSchemaFactory.getSchemaMeta( win.cwm );
-              win.setDomainName( lastfiles[ 0 ] );
-              win.schemaMeta.clearChanged();
-            } else {
-              win.newFile();
-            }
-          } catch ( Exception e ) {
-            log.logError(
-              Messages.getString( "MetaEditor.ERROR_0001_CANT_CHECK_DOMAIN_EXISTENCE", e.toString() ) ); //$NON-NLS-1$
-            log.logError( Const.getStackTracker( e ) );
-          }
-        } else {
-          win.newFile();
-        }
-      } else {
-        win.newFile();
-      }
-    }
-
-    if ( !Splash.isMacOS() ) {
-      splash.hide();
-    }
-
-    win.open();
-    while ( !win.isDisposed() ) {
-      if ( !win.readAndDispatch() ) {
-        win.sleep();
-      }
-    }
-    win.dispose();
-
-    // Close the logfile...
-    System.exit( 0 );
   }
 
-  /**
+private static List<String> fetchUserInfoAndResetMainArgs(String[] args, UserSessionObject userSessionObj) {
+	List<String> newargs = new ArrayList<>();
+	  newargs.addAll(Arrays.asList(args));
+	  String regex = "^(?:-(key|secret)[=])([(\\S)]+)";
+	  for (String arg: args) {
+		  Matcher matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher( arg );
+
+		  while(matcher.find()) {
+			  String loginInfo = matcher.group();
+			  userSessionObj.setAttribute(matcher.group(1), matcher.group(2));
+			  newargs.remove( loginInfo );
+		  }
+	  }
+	return newargs;
+}
+
+  private static void callOOTBPentahoMainMethod(String[] args) throws Exception {
+	    System
+	      .setProperty( "java.naming.factory.initial", "org.osjava.sj.SimpleContextFactory" ); //$NON-NLS-1$ //$NON-NLS-2$
+	    System.setProperty( "org.osjava.sj.root", "simple-jndi" ); //$NON-NLS-1$ //$NON-NLS-2$
+	    System.setProperty( "org.osjava.sj.delimiter", "/" ); //$NON-NLS-1$ //$NON-NLS-2$
+
+	    LogChannel log = new LogChannel( APPLICATION_NAME );
+	    Display.setAppName( APPLICATION_NAME );
+	    Display display = new Display();
+
+	    if ( !Props.isInitialized() ) {
+	      Const.checkPentahoMetadataDirectory();
+	      PropsUI.init( display, Const.getPropertiesFile() ); // things to remember...
+	    }
+
+	    Window.setDefaultImage( Constants.getImageRegistry( Display.getCurrent() ).get( "pentaho-icon" ) ); //$NON-NLS-1$
+
+  //BMC code starts
+    //Splash splash = new Splash( display );
+  //BMC code ends
+
+	    final MetaEditor win = new MetaEditor( log, display );
+
+	    // Read kettle transformation specified on command-line?
+	    if ( args.length == 1 && !Const.isEmpty( args[ 0 ] ) ) {
+	      if ( CWM.exists( args[ 0 ] ) ) { // Only try to load the domain if it exists.
+	        win.cwm = CWM.getInstance( args[ 0 ] );
+	        CwmSchemaFactoryInterface cwmSchemaFactory = Settings.getCwmSchemaFactory();
+	        win.schemaMeta = cwmSchemaFactory.getSchemaMeta( win.cwm );
+	        win.setDomainName( args[ 0 ] );
+	        win.schemaMeta.clearChanged();
+	      } else {
+	        win.newFile();
+	      }
+	    } else {
+	      if ( win.props.openLastFile() ) {
+	        String[] lastfiles = win.props.getLastFiles();
+	        if ( lastfiles.length > 0 ) {
+	          try {
+	            if ( CWM.exists( lastfiles[ 0 ] ) ) { // Only try to load the domain if it exists.
+	              win.cwm = CWM.getInstance( lastfiles[ 0 ] );
+	              CwmSchemaFactoryInterface cwmSchemaFactory = Settings.getCwmSchemaFactory();
+	              win.schemaMeta = cwmSchemaFactory.getSchemaMeta( win.cwm );
+	              win.setDomainName( lastfiles[ 0 ] );
+	              win.schemaMeta.clearChanged();
+	            } else {
+	              win.newFile();
+	            }
+	          } catch ( Exception e ) {
+	            log.logError(
+	              Messages.getString( "MetaEditor.ERROR_0001_CANT_CHECK_DOMAIN_EXISTENCE", e.toString() ) ); //$NON-NLS-1$
+	            log.logError( Const.getStackTracker( e ) );
+	          }
+	        } else {
+	          win.newFile();
+	        }
+	      } else {
+	        win.newFile();
+	      }
+	    }
+
+//BMC code starts
+    //if ( !Splash.isMacOS() ) {
+    //splash.hide();
+    //}
+//BMC code ends
+
+	    win.open();
+	    while ( !win.isDisposed() ) {
+	      if ( !win.readAndDispatch() ) {
+	        win.sleep();
+	      }
+	    }
+	    win.dispose();
+
+	    // Close the logfile...
+	    System.exit( 0 );
+}
+
+/**
    * @return the schemaMeta
    */
   public SchemaMeta getSchemaMeta() {
@@ -4222,5 +5122,60 @@ public class MetaEditor implements SelectionListener {
       }
     }
   }
+//BMC code starts
+	private void setUnamePwdJdbcUrlToBlank(Node currentItem) {
+		NamedNodeMap children = currentItem.getAttributes();
+		for (int r = 0; r < children.getLength(); r++) {
+			if (children.item(r).getNodeName().equalsIgnoreCase("tag")
+					&& (children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_PASSWORD")
+							|| children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_USERNAME")
+							|| children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_ATTRIBUTE_PREFIX_CUSTOM_URL")
+							|| children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_JDBC_URL"))) {
+				Node node = currentItem.getAttributes().getNamedItem("value");
+				node.setNodeValue("");
+			}
+		}
+	}
 
+	private void setConnUrlAndEraseUnamePwd(Node currentItem) {
+		NamedNodeMap children = currentItem.getAttributes();
+		for (int r = 0; r < children.getLength(); r++) {
+			if (children.item(r).getNodeName().equalsIgnoreCase("tag")
+					&& (children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_PASSWORD")
+							|| children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_USERNAME"))) {
+				Node node = currentItem.getAttributes().getNamedItem("value");
+				node.setNodeValue("");
+			}
+
+			if (children.item(r).getNodeName().equalsIgnoreCase("tag") && (children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_ATTRIBUTE_PREFIX_CUSTOM_URL")
+					|| children.item(r).getNodeValue().equalsIgnoreCase("DATABASE_JDBC_URL"))) {
+				Node node = currentItem.getAttributes().getNamedItem("value");
+				node.setNodeValue(BMCAuthenticatorForPentaho.getInstance().getDefaultTenantInfo().getConnectionUrl());
+			}
+		}
+
+	}
+
+  private DocumentBuilderFactory getDocumentBuilderFactory() throws ParserConfigurationException {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setFeature(DOC_TYPE_URL, true);
+    factory.setFeature(GENERAL_ENTITIES_URL, false);
+    factory.setFeature(LOAD_EXTERNAL_DTD_URL, false);
+    factory.setFeature(EXTERNAL_PARAMETER_ENTITIES_URL, false);
+    factory.setXIncludeAware(false);
+    factory.setExpandEntityReferences(false);
+    return factory;
+  }
+
+  private TransformerFactory getTransformerFactory() throws TransformerConfigurationException {
+    String factoryClass = "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl";
+    TransformerFactory factory = TransformerFactory.newInstance(factoryClass, null);
+    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+    System.setProperty("javax.xml.transform.TransformerFactory", factoryClass);
+    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+    factory.setAttribute(ENTITY_EXPANSION_LIMIT, "1");
+    return factory;
+    }
+	//BMC code ends
 }
